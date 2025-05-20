@@ -441,7 +441,7 @@ def extract_url_features(url: str) -> Optional[Dict[str, Any]]:
         
         # Calculate domain features
         features = {
-            # 'domain': original_domain,
+            # 'url': original_domain,
             'domain_length': len(extracted.domain),
             # 'subdomain': subdomain,
             # 'subdomain_count': subdomain_count,
@@ -544,14 +544,14 @@ def process_urls(input_csv: str, output_dir: str) -> bool:
     try:
         df = pd.read_csv(input_csv)
         
-        if 'domain' not in df.columns:
-            raise ValueError("Input CSV must contain a 'domain' column with URLs")
+        if 'url' not in df.columns:
+            raise ValueError("Input CSV must contain a 'url' column with URLs")
         
         print(f"Processing {len(df)} URLs...")
         
         # First pass to collect all unique TLDs
         global ENCOUNTERED_TLDS
-        for url in df['domain']:
+        for url in df['url']:
             try:
                 parsed = urlparse(ensure_url_scheme(url))
                 netloc = parsed.netloc.split(':')[0]
@@ -562,7 +562,7 @@ def process_urls(input_csv: str, output_dir: str) -> bool:
         
         # Second pass to extract features with complete TLD knowledge
         features_list = []
-        for url in df['domain']:
+        for url in df['url']:
             print(f"Processing: {url}")
             features = extract_url_features(url)
             if features:
@@ -593,8 +593,8 @@ def process_urls(input_csv: str, output_dir: str) -> bool:
 
 if __name__ == "__main__":
     # Set your input and output paths here
-    input_file = "PDM/output/dataset1.csv"  # Your input CSV with 'domain' column
-    output_dir = "PDM/output2"  # Directory to save results
+    input_file = "dataset-cleaning/test_data.csv"  # Your input CSV with 'url' column
+    output_dir = "output"  # Directory to save results
     
     # Process the URLs
     success = process_urls(input_file, output_dir)
