@@ -2,19 +2,19 @@ name: Daily Feature Extraction
 
 on:
   schedule:
-    - cron: "0 0 * * *" # Runs every day at 00:00 UTC
-  workflow_dispatch: # Allows manual triggering from GitHub UI
+    - cron: "17 0 * * *" # Runs daily at 17:00 UTC
+  workflow_dispatch: # Optional: Allow manual trigger
 
 jobs:
-  run-feature-extraction:
+  extract-features:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
@@ -23,5 +23,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run feature extraction script
-        run: python full_feature_extraction.py
+      - name: Run Feature Extraction
+        run: |
+          python full_feature_extraction.py
+
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: extracted-features
+          path: output/
