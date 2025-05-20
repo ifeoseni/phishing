@@ -593,7 +593,7 @@ def process_urls(input_csv: str, output_dir: str) -> bool:
 
 if __name__ == "__main__":
     # Set your input and output paths here
-    input_file = "dataset-cleaning/test_data.csv"  # Your input CSV with 'url' column
+    input_file = "input/test_data.csv"  # Your input CSV with 'domain' column
     output_dir = "output"  # Directory to save results
     
     # Process the URLs
