@@ -40,14 +40,14 @@ jobs:
       # Run HTTP Status Checker for the first cleaned file
       - name: Run HTTP Status for PhiUSIIL Cleaned Data
         run: |
-          python http_status_checker.py --input-file cleaned_datasets_v2/PhiUSIIL_cleaned_v2.csv --output-dir http_status
+          python http_status_checker.py --input-file cleaned_data/PhiUSIIL_cleaned_v2.csv --output-dir http_status
         # Continue even if one file fails, or remove `continue-on-error` to fail the job
         continue-on-error: true
 
       # Run HTTP Status Checker for the second cleaned file
       - name: Run HTTP Status for Mendeley Cleaned Data
         run: |
-          python http_status_checker.py --input-file cleaned_datasets_v2/Mendeley_cleaned_v2.csv --output-dir http_status
+          python http_status_checker.py --input-file cleaned_data/Mendeley_cleaned_v2.csv --output-dir http_status
         continue-on-error: true
 
       # Assuming lexical extractor runs independently or uses specific inputs
