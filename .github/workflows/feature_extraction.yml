@@ -23,6 +23,12 @@ jobs:
           python -m pip install --upgrade pip
           # Assuming requirements.txt includes pandas, aiohttp, aiodns, tldextract, etc.
           pip install -r requirements.txt
+      # Add this step for debugging:
+      - name: List installed packages
+        run: pip list
+
+      - name: Create HTTP Status Output Directory
+        run: mkdir -p http_status # Create directory for outputs
 
       # Optional: Add step to run your data cleaning script if it's not done elsewhere
       # This step should create the cleaned_datasets_v2 directory and files
