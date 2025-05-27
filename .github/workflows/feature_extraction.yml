@@ -1,4 +1,4 @@
-name: Daily Feature Extraction
+name: Feature Extraction With Testing Dataset
 
 on:
   schedule:

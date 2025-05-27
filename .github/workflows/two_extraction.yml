@@ -1,4 +1,4 @@
-name: Two Features
+name: Two Features With Test Dataset
 
 on:
   schedule:
@@ -6,14 +6,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Job to run HTTP status checks in parallel for each cleaned file
   run-http-checks:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false # Allows other matrix jobs to continue if one fails
+      fail-fast: false
       matrix:
-        # Define the input files to process in parallel
-        # Assumes these files exist in the specified path after checkout
         input_file:
           - cleaned_data/PhiUSIIL_cleaned_v2.csv
           - cleaned_data/Mendeley_cleaned_v2.csv
@@ -30,35 +27,29 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # IMPORTANT: Ensure requirements.txt includes aiohttp and aiodns!
           pip install -r requirements.txt
 
       - name: Create HTTP Status Output Directory
-        run: mkdir -p http_status # Create directory for outputs
+        run: mkdir -p http_status
 
       - name: Run HTTP Status Checker for ${{ matrix.input_file }}
         id: run_checker
         run: |
           INPUT_BASENAME=$(basename "${{ matrix.input_file }}")
           echo "Running HTTP status check for ${{ matrix.input_file }}"
-          python two_http_status_checker.py --input-file "${{ matrix.input_file }}" --output-dir http_status
-          # Set the expected output file path for the upload step
-          echo "output_file=http_status/http_status_${INPUT_BASENAME}" >> $GITHUB_OUTPUT
-        # Optional: Add continue-on-error if needed
-        # continue-on-error: true
+          OUTPUT_FILE=$(python two_http_status_checker.py --input-file "${{ matrix.input_file }}" --output-dir http_status)
+          echo "output_file=${OUTPUT_FILE}" >> $GITHUB_OUTPUT
 
       - name: Upload HTTP Status Features for ${{ matrix.input_file }}
         uses: actions/upload-artifact@v4
         with:
-          # Upload each result file as part of the same artifact
           name: http_status_features
           path: ${{ steps.run_checker.outputs.output_file }}
-          if-no-files-found: error # Error if the script didn't produce the output file
+          if-no-files-found: error
 
-  # Job to run lexical analysis after all HTTP checks are done
   run-lexical-analysis:
     runs-on: ubuntu-latest
-    needs: run-http-checks # Ensures this job runs only after all matrix jobs succeed
+    needs: run-http-checks
 
     steps:
       - name: Checkout repository
@@ -76,13 +67,11 @@ jobs:
 
       - name: Run Lexical Feature Extraction
         run: |
-          # Assuming this script knows where to find its inputs or operates independently
           python lexical_feature_extractor.py
 
       - name: Upload Lexical Features
         uses: actions/upload-artifact@v4
         with:
           name: lexical_features
-          path: lexical_features/ # Assuming this directory is created by the lexical script
-          if-no-files-found: warn # Warn instead of error if lexical output is missing
-
+          path: lexical_features/
+          if-no-files-found: warn

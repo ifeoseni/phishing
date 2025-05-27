@@ -14,7 +14,7 @@ import argparse # Added for command-line arguments
 
 # --- Configuration ---
 MAX_CONCURRENT_REQUESTS = 200 # Adjust based on system resources and network limits
-REQUEST_TIMEOUT = 10 # Seconds
+REQUEST_TIMEOUT = 30 # Seconds
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 # --- End Configuration ---
 
@@ -174,7 +174,10 @@ async def process_urls_async(input_csv: str, output_dir: str):
         
         # Modified: Derive output filename from input filename
         input_basename = os.path.basename(input_csv)
-        output_filename = f"http_status_{input_basename}"
+        # output_filename = f"http_status_{input_basename}"
+        timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_filename = f"http_status_{timestamp_str}_{input_basename}"
+       
         output_file = os.path.join(output_dir, output_filename)
         
         status_df.to_csv(output_file, index=False, encoding='utf-8') # Added encoding

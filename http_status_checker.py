@@ -174,7 +174,8 @@ async def process_urls_async(input_csv: str, output_dir: str):
         
         # Modified: Derive output filename from input filename
         input_basename = os.path.basename(input_csv)
-        output_filename = f"http_status_{input_basename}"
+        timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_filename = f"http_status_{timestamp_str}_{input_basename}"
         output_file = os.path.join(output_dir, output_filename)
         
         status_df.to_csv(output_file, index=False, encoding='utf-8') # Added encoding
