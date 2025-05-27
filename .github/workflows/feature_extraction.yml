@@ -65,6 +65,15 @@ jobs:
           else
             echo "No HTTP status files to commit"
           fi
+      - name: Verify HTTP Status files exist
+        run: |
+          if [ ! -d "http_status" ] || [ -z "$(ls -A http_status/*.csv 2>/dev/null)" ]; then
+            echo "Error: No HTTP status CSV files found!"
+            exit 1
+          fi
+          echo "HTTP status files found:"
+          ls -la http_status/*.csv
+
       - name: Run Lexical Feature Extraction
         run: |
           python lexical_feature_extractor.py

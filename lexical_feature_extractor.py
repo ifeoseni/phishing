@@ -119,16 +119,36 @@ def extract_lexical_features(url: str) -> dict:
 
     return features
 
+# def get_latest_csv_file(directory: str) -> str:
+#     csv_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.csv')]
+#     if not csv_files:
+#         raise FileNotFoundError("No CSV files found in directory.")
+#     latest_file = max(csv_files, key=os.path.getmtime)
+#     return latest_file
 def get_latest_csv_file(directory: str) -> str:
+    if not os.path.exists(directory):
+        raise FileNotFoundError(f"Directory '{directory}' does not exist")
+    
     csv_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.csv')]
     if not csv_files:
-        raise FileNotFoundError("No CSV files found in directory.")
+        raise FileNotFoundError(f"No CSV files found in directory '{directory}'")
     latest_file = max(csv_files, key=os.path.getmtime)
     return latest_file
-
 def process_urls_for_lexical_features(output_dir: str) -> bool:
     try:
-        latest_http_csv = get_latest_csv_file("http_statuss") #http_status
+        # Create output directory first
+        os.makedirs(output_dir, exist_ok=True)
+        
+        print("Current working directory:", os.getcwd())
+        print("Contents of http_status directory:", os.listdir("http_status"))
+        
+        latest_http_csv = get_latest_csv_file("http_status")
+        df = pd.read_csv(latest_http_csv, encoding='utf-8')
+        
+        # Rest of your code...
+def process_urls_for_lexical_featuresOld(output_dir: str) -> bool:
+    try:
+        latest_http_csv = get_latest_csv_file("http_status") #http_status
         # df = pd.read_csv(latest_http_csv)
         df = pd.read_csv(latest_http_csv, encoding='utf-8')
 
