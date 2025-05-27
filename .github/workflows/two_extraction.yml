@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.MTECH }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -35,10 +37,11 @@ jobs:
       - name: Run HTTP Status Checker for ${{ matrix.input_file }}
         id: run_checker
         run: |
-          INPUT_BASENAME=$(basename "${{ matrix.input_file }}")
+          INPUT_BASENAME=$(basename "${{ matrix.input_file }}" .csv)
           echo "Running HTTP status check for ${{ matrix.input_file }}"
-          OUTPUT_FILE=$(python two_http_status_checker.py --input-file "${{ matrix.input_file }}" --output-dir http_status)
-          echo "output_file=${OUTPUT_FILE}" >> $GITHUB_OUTPUT
+          python two_http_status_checker.py --input-file "${{ matrix.input_file }}" --output-dir http_status
+          OUTPUT_PATH="http_status/${INPUT_BASENAME}_http_status.csv"
+          echo "output_file=${OUTPUT_PATH}" >> "$GITHUB_OUTPUT"
 
       - name: Upload HTTP Status Features for ${{ matrix.input_file }}
         uses: actions/upload-artifact@v4
@@ -47,6 +50,15 @@ jobs:
           path: ${{ steps.run_checker.outputs.output_file }}
           if-no-files-found: error
 
+      - name: Commit and Push HTTP Feature Files
+        run: |
+          git config user.name "Ifeoluwa Oseni"
+          git config user.email "ifeoseni@gmail.com"
+          git pull origin main
+          git add http_status/
+          git diff --cached --quiet || git commit -m "Auto-update: HTTP status features"
+          git push origin main
+
   run-lexical-analysis:
     runs-on: ubuntu-latest
     needs: run-http-checks
@@ -54,6 +66,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.MTECH }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -75,3 +89,12 @@ jobs:
           name: lexical_features
           path: lexical_features/
           if-no-files-found: warn
+
+      - name: Commit and Push Lexical Feature Files
+        run: |
+          git config user.name "Ifeoluwa Oseni"
+          git config user.email "ifeoseni@gmail.com"
+          git pull origin main
+          git add lexical_features/
+          git diff --cached --quiet || git commit -m "Auto-update: Lexical features"
+          git push origin main
