@@ -1,75 +1,102 @@
 name: Feature Extraction With Testing Dataset
-
 on:
   schedule:
     - cron: "30 22 * * *" # 22:30 UTC = 23:30 Lagos (WAT)
   workflow_dispatch:
-
 jobs:
   extract-features:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          token: ${{ secrets.MTECH }} # ✅ Use your PAT here
-
+          token: ${{ secrets.MTECH }}
+          fetch-depth: 0 # Fetch full history to avoid issues
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.13"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
       - name: Verify aiohttp installation (debug)
         run: |
           pip show aiohttp || (echo "aiohttp not installed!" && exit 1)
-
       - name: Create HTTP Status Output Directory
         run: mkdir -p http_status
-
       - name: Run HTTP Status for PhiUSIIL Cleaned Data
         run: |
           python http_status_checker.py --input-file cleaned_data/PhiUSIIL_cleaned_v2.csv --output-dir http_status
         continue-on-error: true
-
       - name: Run HTTP Status for Mendeley Cleaned Data
         run: |
           python http_status_checker.py --input-file cleaned_data/Mendeley_cleaned_v2.csv --output-dir http_status
         continue-on-error: true
-
       - name: Upload HTTP Status Features
         uses: actions/upload-artifact@v4
         with:
           name: http_status_features
           path: http_status/
-
+          if-no-files-found: warn
       - name: Commit and push HTTP Status feature files
         run: |
           git config user.name "Ifeoluwa Oseni"
           git config user.email "ifeoseni@gmail.com"
-          git add http_status/ || echo "Nothing to add"
-          git diff --cached --quiet || git commit -m "Auto-update: HTTP status feature extraction"
-          git push origin main
 
+          # Pull latest changes first to avoid conflicts
+          git pull origin main --rebase || git pull origin main
+
+          # Add files if they exist
+          if [ -d "http_status/" ] && [ "$(ls -A http_status/)" ]; then
+            git add http_status/
+            if ! git diff --cached --quiet; then
+              git commit -m "Auto-update: HTTP status feature extraction - $(date '+%Y-%m-%d %H:%M:%S')"
+              
+              # Retry push with pull if it fails
+              git push origin main || {
+                echo "Push failed, pulling and retrying..."
+                git pull origin main --rebase
+                git push origin main
+              }
+            else
+              echo "No changes to commit for HTTP status features"
+            fi
+          else
+            echo "No HTTP status files to commit"
+          fi
       - name: Run Lexical Feature Extraction
         run: |
           python lexical_feature_extractor.py
-
       - name: Upload Lexical Features
         uses: actions/upload-artifact@v4
         with:
           name: lexical_features
           path: lexical_features/
-
+          if-no-files-found: warn
       - name: Commit and push Lexical feature files
         run: |
           git config user.name "Ifeoluwa Oseni"
           git config user.email "ifeoseni@gmail.com"
-          git add lexical_features/ || echo "Nothing to add"
-          git diff --cached --quiet || git commit -m "Auto-update: Lexical feature extraction"
-          git push origin main
+
+          # Pull latest changes first to avoid conflicts
+          git pull origin main --rebase || git pull origin main
+
+          # Add files if they exist
+          if [ -d "lexical_features/" ] && [ "$(ls -A lexical_features/)" ]; then
+            git add lexical_features/
+            if ! git diff --cached --quiet; then
+              git commit -m "Auto-update: Lexical feature extraction - $(date '+%Y-%m-%d %H:%M:%S')"
+              
+              # Retry push with pull if it fails
+              git push origin main || {
+                echo "Push failed, pulling and retrying..."
+                git pull origin main --rebase
+                git push origin main
+              }
+            else
+              echo "No changes to commit for lexical features"
+            fi
+          else
+            echo "No lexical feature files to commit"
+          fi
