@@ -145,13 +145,6 @@ def process_urls_for_lexical_features(output_dir: str) -> bool:
         latest_http_csv = get_latest_csv_file("http_status")
         df = pd.read_csv(latest_http_csv, encoding='utf-8')
         
-        # Rest of your code...
-def process_urls_for_lexical_featuresOld(output_dir: str) -> bool:
-    try:
-        latest_http_csv = get_latest_csv_file("http_status") #http_status
-        # df = pd.read_csv(latest_http_csv)
-        df = pd.read_csv(latest_http_csv, encoding='utf-8')
-
 
         if 'url' not in df.columns:
             raise ValueError("CSV must contain a 'url' column with URLs")
