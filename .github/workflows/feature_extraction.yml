@@ -42,15 +42,23 @@ jobs:
           python http_status_checker.py --input-file cleaned_data/Mendeley_cleaned_v2.csv --output-dir http_status
         continue-on-error: true
 
-      - name: Run Lexical Feature Extraction
-        run: |
-          python lexical_feature_extractor.py
-
       - name: Upload HTTP Status Features
         uses: actions/upload-artifact@v4
         with:
           name: http_status_features
           path: http_status/
+
+      - name: Commit and push HTTP Status feature files
+        run: |
+          git config user.name "Ifeoluwa Oseni"
+          git config user.email "ifeoseni@gmail.com"
+          git add http_status/ || echo "Nothing to add"
+          git diff --cached --quiet || git commit -m "Auto-update: HTTP status feature extraction"
+          git push origin main
+
+      - name: Run Lexical Feature Extraction
+        run: |
+          python lexical_feature_extractor.py
 
       - name: Upload Lexical Features
         uses: actions/upload-artifact@v4
@@ -58,10 +66,10 @@ jobs:
           name: lexical_features
           path: lexical_features/
 
-      - name: Commit and push feature files
+      - name: Commit and push Lexical feature files
         run: |
           git config user.name "Ifeoluwa Oseni"
           git config user.email "ifeoseni@gmail.com"
-          git add http_status/ lexical_features/ || echo "Nothing to add"
-          git diff --cached --quiet || git commit -m "Daily auto-update: feature extraction"
+          git add lexical_features/ || echo "Nothing to add"
+          git diff --cached --quiet || git commit -m "Auto-update: Lexical feature extraction"
           git push origin main

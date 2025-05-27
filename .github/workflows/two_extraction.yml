@@ -1,10 +1,8 @@
 name: Two Features With Test Dataset
-
 on:
   schedule:
     - cron: "30 22 * * *" # 22:30 UTC = 23:30 Lagos (WAT)
   workflow_dispatch:
-
 jobs:
   run-http-checks:
     runs-on: ubuntu-latest
@@ -14,42 +12,45 @@ jobs:
         input_file:
           - cleaned_data/PhiUSIIL_cleaned_v2.csv
           - cleaned_data/Mendeley_cleaned_v2.csv
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.MTECH }}
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
       - name: Create HTTP Status Output Directory
         run: mkdir -p http_status
-
       - name: Run HTTP Status Checker for ${{ matrix.input_file }}
         id: run_checker
         run: |
           INPUT_BASENAME=$(basename "${{ matrix.input_file }}" .csv)
           echo "Running HTTP status check for ${{ matrix.input_file }}"
           python two_http_status_checker.py --input-file "${{ matrix.input_file }}" --output-dir http_status
-          OUTPUT_PATH="http_status/${INPUT_BASENAME}_http_status.csv"
-          echo "output_file=${OUTPUT_PATH}" >> "$GITHUB_OUTPUT"
 
+          # Find the actual output file (handles timestamp in filename)
+          OUTPUT_FILE=$(find http_status -name "*${INPUT_BASENAME}*.csv" -type f | head -1)
+
+          if [ -z "$OUTPUT_FILE" ]; then
+            echo "Error: No output file found for ${INPUT_BASENAME}"
+            exit 1
+          fi
+
+          echo "Found output file: $OUTPUT_FILE"
+          echo "output_file=${OUTPUT_FILE}" >> "$GITHUB_OUTPUT"
+          echo "input_basename=${INPUT_BASENAME}" >> "$GITHUB_OUTPUT"
       - name: Upload HTTP Status Features for ${{ matrix.input_file }}
         uses: actions/upload-artifact@v4
         with:
-          name: http_status_features
+          name: http_status_features_${{ steps.run_checker.outputs.input_basename }}
           path: ${{ steps.run_checker.outputs.output_file }}
           if-no-files-found: error
-
       - name: Commit and Push HTTP Feature Files
         run: |
           git config user.name "Ifeoluwa Oseni"
@@ -58,38 +59,31 @@ jobs:
           git add http_status/
           git diff --cached --quiet || git commit -m "Auto-update: HTTP status features"
           git push origin main
-
   run-lexical-analysis:
     runs-on: ubuntu-latest
     needs: run-http-checks
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.MTECH }}
-
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
       - name: Run Lexical Feature Extraction
         run: |
           python lexical_feature_extractor.py
-
       - name: Upload Lexical Features
         uses: actions/upload-artifact@v4
         with:
           name: lexical_features
           path: lexical_features/
           if-no-files-found: warn
-
       - name: Commit and Push Lexical Feature Files
         run: |
           git config user.name "Ifeoluwa Oseni"
