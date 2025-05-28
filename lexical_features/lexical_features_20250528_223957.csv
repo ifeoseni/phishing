@@ -1,0 +1,15 @@
+url,http_status,is_active,has_redirect,error,full_url_length,domain_length,subdomain_count,num_subdomains,has_subdomain,has_www,is_ip,contains_ip_address,suspicious_tld,shortened,has_login,has_register,has_http,has_https,has_port,path_length,query_length,has_double_slash_redirect,starts_with_https_token,has_unicode_characters,is_url_encoded,long_url,long_domain_name,has_multiple_tlds,hyphen_in_domain,contains_keyword_mismatch,contains_suspicious_words,num_at,num_tilde,num_underscore,num_percent,num_hash,num_dollar,num_colon,num_dot,num_hyphen,num_slash,num_question,num_equal,num_ampersand,num_digits,num_letters,num_vowels,num_consonants,digit_ratio,letter_ratio,has_hex,has_repeated_chars,has_number_sequence,has_sensitive_keywords
+https://www.reddit.com,403,1,0,,22,6,1,0,1,1,0,0,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,2,0,0,0,0,17,3,14,0.0,0.7727272727272727,0,1,0,0
+https://www.youtube.com,200,1,0,,23,7,1,0,1,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,2,0,0,0,0,18,5,13,0.0,0.782608695652174,0,1,0,0
+https://www.amazon.com,200,1,0,,22,6,1,0,1,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,2,0,0,0,0,17,4,13,0.0,0.7727272727272727,0,1,0,0
+https://www.wikipedia.org,200,1,0,,25,9,1,0,1,1,0,0,1,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,2,0,0,0,0,20,6,14,0.0,0.8,0,1,0,0
+https://www.google.com,200,1,0,,22,6,1,0,1,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,2,0,0,0,0,17,4,13,0.0,0.7727272727272727,0,1,0,0
+https://www.google.co.jp,200,1,0,,24,6,1,0,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,3,0,2,0,0,0,0,18,4,14,0.0,0.75,0,1,0,0
+https://www.google.co.in,200,1,0,,24,6,1,0,1,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,3,0,2,0,0,0,0,18,5,13,0.0,0.75,0,1,0,0
+https://www.twitter.com,400,1,0,HTTP Error: 400 Got more than 8190 bytes (10054) when reading Header value is too long.,23,7,1,0,1,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,2,0,0,0,0,18,3,15,0.0,0.782608695652174,0,1,0,0
+https://www.facebook.com,400,1,0,,24,8,1,0,1,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,2,0,0,0,0,19,5,14,0.0,0.7916666666666666,0,1,0,0
+https://www.yahoo.com,200,1,0,,21,5,1,0,1,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,2,0,0,0,0,16,4,12,0.0,0.7619047619047619,0,1,0,0
+https://www.qq.com,200,1,0,,18,2,1,0,1,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,2,0,0,0,0,13,1,12,0.0,0.7222222222222222,0,1,0,0
+https://www.taobao.com,200,1,0,,22,6,1,0,1,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,2,0,0,0,0,17,5,12,0.0,0.7727272727272727,0,1,0,0
+https://www.tmall.com,200,1,0,,21,5,1,0,1,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,2,0,0,0,0,16,2,14,0.0,0.7619047619047619,0,1,0,0
+https://www.baidu.com,200,1,0,,21,5,1,0,1,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,0,2,0,0,0,0,16,4,12,0.0,0.7619047619047619,0,1,0,0
