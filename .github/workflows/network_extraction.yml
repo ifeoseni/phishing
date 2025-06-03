@@ -1,0 +1,127 @@
+# GitHub Actions Workflow for Network Feature Extraction
+
+name: Network Feature Extraction Workflow
+
+on:
+  workflow_dispatch: # Allows manual triggering
+  # schedule:
+  #   - cron: "0 3 * * *" # Example: Run daily at 3 AM UTC
+
+jobs:
+  run-network-extraction:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # Continue other jobs even if one fails
+      matrix:
+        dataset: [phiusiil, mendeley] # Define the two datasets to process
+        include:
+          - dataset: phiusiil
+            input_pattern: "*PhiUSIIL_cleaned_v2.csv"
+            # output_filename removed - will be generated dynamically
+          - dataset: mendeley
+            input_pattern: "*Mendeley_cleaned_v2.csv"
+            # output_filename removed - will be generated dynamically
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        # If your script/data are in a private repo, add token:
+        # with:
+        #   token: ${{ secrets.YOUR_REPO_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11" # Match the version used in testing
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Assuming requirements.txt is in the root of the repository
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            echo "Warning: requirements.txt not found. Installing specific packages..."
+            pip install aiohttp aiodns pandas tldextract beautifulsoup4 python-whois lxml
+          fi
+
+      - name: Define Paths, Find Input File, and Generate Output Path
+        id: setup
+        run: |
+          INPUT_DIR="lexical_features" # Assumes this directory exists in the repo root
+          OUTPUT_DIR="network_data_with_lexical_features"
+          PYTHON_SCRIPT="network_feature_extractor.py" # Assumes script is in repo root
+          INPUT_PATTERN="${{ matrix.input_pattern }}"
+          # OUTPUT_FILENAME="${{ matrix.output_filename }}" # Removed
+
+          echo "Input Directory: $INPUT_DIR"
+          echo "Output Directory: $OUTPUT_DIR"
+          echo "Python Script: $PYTHON_SCRIPT"
+          echo "Input Pattern: $INPUT_PATTERN"
+          # echo "Output Filename: $OUTPUT_FILENAME" # Removed
+
+          # Create directories if they don't exist (important for the first run)
+          mkdir -p "$INPUT_DIR"
+          mkdir -p "$OUTPUT_DIR"
+
+          # Add dummy files if input dir is empty (for demonstration/testing)
+          if [ -z "$(ls -A $INPUT_DIR)" ]; then
+            echo "Input directory '$INPUT_DIR' is empty. Creating dummy files..."
+            touch "$INPUT_DIR/dummy_$(date +%Y%m%d)_PhiUSIIL_cleaned_v2.csv"
+            touch "$INPUT_DIR/dummy_$(date +%Y%m%d)_Mendeley_cleaned_v2.csv"
+            echo "Please replace dummy files with actual data."
+          fi
+
+          # Find the latest file matching the pattern for the current dataset
+          LATEST_INPUT_FILE=$(find "$INPUT_DIR" -maxdepth 1 -name "$INPUT_PATTERN" -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)
+
+          if [ -z "$LATEST_INPUT_FILE" ]; then
+            echo "::error::No file matching pattern '$INPUT_PATTERN' found in '$INPUT_DIR'."
+            exit 1
+          fi
+
+          # Generate output filename based on input filename
+          INPUT_BASENAME=$(basename "$LATEST_INPUT_FILE")
+          OUTPUT_FILENAME="network_features_${INPUT_BASENAME}"
+          OUTPUT_FILE_PATH="$OUTPUT_DIR/$OUTPUT_FILENAME"
+
+          echo "Found latest input file: $LATEST_INPUT_FILE"
+          echo "Generated output file path: $OUTPUT_FILE_PATH"
+
+          # Set outputs for subsequent steps
+          echo "LATEST_INPUT_FILE=$LATEST_INPUT_FILE" >> $GITHUB_OUTPUT
+          echo "OUTPUT_FILE_PATH=$OUTPUT_FILE_PATH" >> $GITHUB_OUTPUT
+          echo "PYTHON_SCRIPT_PATH=$PYTHON_SCRIPT" >> $GITHUB_OUTPUT
+
+      - name: Run Network Feature Extraction for ${{ matrix.dataset }}
+        run: |
+          echo "Running Python script: ${{ steps.setup.outputs.PYTHON_SCRIPT_PATH }}"
+          echo "Input: ${{ steps.setup.outputs.LATEST_INPUT_FILE }}"
+          echo "Output: ${{ steps.setup.outputs.OUTPUT_FILE_PATH }}"
+          python "${{ steps.setup.outputs.PYTHON_SCRIPT_PATH }}" \
+            --input-file "${{ steps.setup.outputs.LATEST_INPUT_FILE }}" \
+            --output-file "${{ steps.setup.outputs.OUTPUT_FILE_PATH }}"
+
+      # Optional: Upload results as artifacts
+      - name: Upload Network Features for ${{ matrix.dataset }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: network_features_${{ matrix.dataset }}_${{ github.run_id }} # Added run ID for uniqueness
+          path: ${{ steps.setup.outputs.OUTPUT_FILE_PATH }}
+          if-no-files-found: error # Fail the workflow if the output file isn't created
+
+
+      # Optional: Commit results back to the repository
+      # - name: Commit and Push Network Feature Files
+      #   run: |
+      #     git config user.name "GitHub Actions Bot"
+      #     git config user.email "actions-bot@github.com"
+      #     git pull # Ensure local repo is up-to-date
+      #     git add network_data_with_lexical_features/
+      #     # Commit only if there are changes
+      #     if ! git diff --cached --quiet; then
+      #       git commit -m "Auto-update: Network features for ${{ matrix.dataset }}"
+      #       git push
+      #     else
+      #       echo "No changes to commit for ${{ matrix.dataset }}."
+      #     fi

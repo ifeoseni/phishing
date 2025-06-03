@@ -1,0 +1,7 @@
+aiohttp
+aiodns
+pandas
+tldextract
+beautifulsoup4
+python-whois
+lxml # Added as optional parser in the script
