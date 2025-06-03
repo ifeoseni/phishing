@@ -75,9 +75,36 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Download HTTP Status Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: http_status # Download all artifacts into this directory
+          # Pattern matching might be needed if names are specific
+          # pattern: http_status_features_*
+          # merge-multiple: true # If artifacts have the same name
+
+      - name: List downloaded files (debug)
+        run: ls -R http_status
+
       - name: Run Lexical Feature Extraction
         run: |
-          python lexical_feature_extractor.py
+          # Ensure the output directory exists
+          mkdir -p lexical_features
+          # Find CSV files within the downloaded artifact subdirectories and run the extractor
+          # Note: download-artifact@v4 might place files in subdirs named after the artifact
+          find http_status -name '*.csv' -type f | while read input_csv; do
+            if [ -f "$input_csv" ]; then
+              echo "Processing $input_csv with lexical_feature_extractor.py"
+              python lexical_feature_extractor.py --input-file "$input_csv" --output-dir lexical_features
+            else
+              echo "Warning: Problem processing file $input_csv"
+            fi
+          done
+
+          # Check if any output files were created
+          if [ -z "$(ls -A lexical_features/*.csv 2>/dev/null)" ]; then
+             echo "Warning: No lexical feature CSV files were generated."
+          fi
       - name: Upload Lexical Features
         uses: actions/upload-artifact@v4
         with:

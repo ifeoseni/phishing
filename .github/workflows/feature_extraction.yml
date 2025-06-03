@@ -76,7 +76,18 @@ jobs:
 
       - name: Run Lexical Feature Extraction
         run: |
-          python lexical_feature_extractor.py
+          # Ensure the output directory exists
+          mkdir -p lexical_features
+          # Find CSV files in http_status and run the extractor for each
+          for input_csv in http_status/*.csv; do
+            if [ -f "$input_csv" ]; then
+              echo "Processing $input_csv with lexical_feature_extractor.py"
+              python lexical_feature_extractor.py --input-file "$input_csv" --output-dir lexical_features
+            else
+              echo "Warning: No CSV files found in http_status/ to process."
+              # Optionally exit if no files found: exit 1
+            fi
+          done
       - name: Upload Lexical Features
         uses: actions/upload-artifact@v4
         with:
