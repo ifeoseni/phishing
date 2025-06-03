@@ -115,7 +115,34 @@ jobs:
         run: |
           git config user.name "Ifeoluwa Oseni"
           git config user.email "ifeoseni@gmail.com"
-          git pull origin main
-          git add lexical_features/
-          git diff --cached --quiet || git commit -m "Auto-update: Lexical features"
-          git push origin main
+
+          # Clean untracked files in lexical_features before pulling to avoid conflicts
+          echo "Cleaning untracked files in lexical_features/ directory..."
+          git clean -fdx lexical_features/
+          # Alternatively, if git clean is not desired: rm -rf lexical_features/*
+
+          # Pull latest changes first to avoid conflicts
+          echo "Pulling latest changes from origin main..."
+          git pull origin main --rebase || git pull origin main
+
+          # Add newly generated files if they exist
+          if [ -d "lexical_features/" ] && [ "$(ls -A lexical_features/)" ]; then
+            echo "Adding lexical_features/ files to git..."
+            git add lexical_features/
+            if ! git diff --cached --quiet; then
+              echo "Committing lexical feature updates..."
+              git commit -m "Auto-update: Lexical features"
+              
+              # Retry push with pull if it fails
+              echo "Pushing changes to origin main..."
+              git push origin main || {
+                echo "Push failed, pulling and retrying..."
+                git pull origin main --rebase
+                git push origin main
+              }
+            else
+              echo "No changes to commit for lexical features"
+            fi
+          else
+            echo "No lexical feature files to commit"
+          fi

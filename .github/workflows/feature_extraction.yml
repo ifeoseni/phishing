@@ -99,16 +99,25 @@ jobs:
           git config user.name "Ifeoluwa Oseni"
           git config user.email "ifeoseni@gmail.com"
 
+          # Clean untracked files in lexical_features before pulling to avoid conflicts
+          echo "Cleaning untracked files in lexical_features/ directory..."
+          git clean -fdx lexical_features/
+          # Alternatively, if git clean is not desired: rm -rf lexical_features/*
+
           # Pull latest changes first to avoid conflicts
+          echo "Pulling latest changes from origin main..."
           git pull origin main --rebase || git pull origin main
 
-          # Add files if they exist
+          # Add newly generated files if they exist
           if [ -d "lexical_features/" ] && [ "$(ls -A lexical_features/)" ]; then
+            echo "Adding lexical_features/ files to git..."
             git add lexical_features/
             if ! git diff --cached --quiet; then
-              git commit -m "Auto-update: Lexical feature extraction - $(date '+%Y-%m-%d %H:%M:%S')"
+              echo "Committing lexical feature updates..."
+              git commit -m "Auto-update: Lexical feature extraction - $(date 	+%Y-%m-%d %H:%M:%S	)"
               
               # Retry push with pull if it fails
+              echo "Pushing changes to origin main..."
               git push origin main || {
                 echo "Push failed, pulling and retrying..."
                 git pull origin main --rebase
