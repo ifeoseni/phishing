@@ -268,8 +268,8 @@ def process_urls(input_filepath, output_dir):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract lexical features from URLs in a CSV file.")
     parser.add_argument("--input-file", required=True, help="Path to the input CSV file containing URLs (must have a 	url	 column). Expected filename format like 	...http_status...	")
-    parser.add_argument(default="lexical_features", help="Directory to save the output CSV file (default: lexical_features)")
-    #"--output-dir", 
+    parser.add_argument("--output-dir",default="lexical_features", help="Directory to save the output CSV file (default: lexical_features)")
+    #, 
     
     args = parser.parse_args()
     
