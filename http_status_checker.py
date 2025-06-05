@@ -74,6 +74,7 @@ def was_redirected_outside_domain(original_url: str, history: tuple) -> bool:
 async def check_url_status_async(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, url: str, label: str) -> dict:
     result = {
         'url': url,
+        'label': label,
         'http_status': 0,
         'is_active': 0,
         'has_redirect': 0,
