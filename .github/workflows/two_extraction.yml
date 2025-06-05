@@ -1,11 +1,36 @@
-name: Stage 1 To Run HTTP Status Code Check For 2
+name: Stage 1 And 2 To Run HTTP Status Code Check For The 2 Datasets and Lexical Analysis
 on:
   schedule:
     - cron: "30 22 * * *" # 22:30 UTC = 23:30 Lagos (WAT)
   workflow_dispatch:
 jobs:
+  verify-input-files:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.MTECH }}
+          fetch-depth: 0
+
+      - name: Verify input files have required columns
+        run: |
+          for file in cleaned_data/*.csv; do
+            if [ -f "$file" ]; then
+              if ! head -1 "$file" | grep -q 'url'; then
+                echo "::error::Input file $file is missing 'url' column"
+                exit 1
+              fi
+              if ! head -1 "$file" | grep -q 'label'; then
+                echo "::error::Input file $file is missing 'label' column"
+                exit 1
+              fi
+            fi
+          done
+
   run-http-checks:
     runs-on: ubuntu-latest
+    needs: verify-input-files
     strategy:
       fail-fast: false
       matrix:
@@ -17,24 +42,32 @@ jobs:
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.MTECH }}
+          fetch-depth: 0
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
       - name: Create HTTP Status Output Directory
         run: mkdir -p http_status
+
       - name: Run HTTP Status Checker for ${{ matrix.input_file }}
         id: run_checker
         run: |
-          INPUT_BASENAME=$(basename "${{ matrix.input_file }}" .csv)
-          echo "Running HTTP status check for ${{ matrix.input_file }}"
-          python two_http_status_checker.py --input-file "${{ matrix.input_file }}" --output-dir http_status
+          # Use absolute path to ensure correct file access
+          ABS_INPUT_FILE="$(realpath "${{ matrix.input_file }}")"
+          INPUT_BASENAME=$(basename "$ABS_INPUT_FILE" .csv)
 
-          # Find the actual output file (handles timestamp in filename)
+          echo "Running HTTP status check for $ABS_INPUT_FILE"
+          python two_http_status_checker.py --input-file "$ABS_INPUT_FILE" --output-dir http_status
+
+          # Find the actual output file
           OUTPUT_FILE=$(find http_status -name "*${INPUT_BASENAME}*.csv" -type f | head -1)
 
           if [ -z "$OUTPUT_FILE" ]; then
@@ -45,20 +78,40 @@ jobs:
           echo "Found output file: $OUTPUT_FILE"
           echo "output_file=${OUTPUT_FILE}" >> "$GITHUB_OUTPUT"
           echo "input_basename=${INPUT_BASENAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify HTTP Status Output Contains Label
+        run: |
+          echo "Checking for label column in ${{ steps.run_checker.outputs.output_file }}"
+          if head -1 "${{ steps.run_checker.outputs.output_file }}" | grep -q 'label'; then
+            echo "Label column found in output"
+          else
+            echo "::error::Label column missing in HTTP status output"
+            exit 1
+          fi
+
       - name: Upload HTTP Status Features for ${{ matrix.input_file }}
         uses: actions/upload-artifact@v4
         with:
           name: http_status_features_${{ steps.run_checker.outputs.input_basename }}
           path: ${{ steps.run_checker.outputs.output_file }}
           if-no-files-found: error
+
       - name: Commit and Push HTTP Feature Files
+        env:
+          GITHUB_TOKEN: ${{ secrets.MTECH }}
         run: |
           git config user.name "Ifeoluwa Oseni"
           git config user.email "ifeoseni@gmail.com"
-          git pull origin main
+          git pull origin main --rebase
           git add http_status/
-          git diff --cached --quiet || git commit -m "Auto-update: HTTP status features"
-          git push origin main
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit for HTTP status features"
+          else
+            git commit -m "Auto-update: HTTP status features [skip ci]"
+            git push origin HEAD:main
+          fi
+
   run-lexical-analysis:
     runs-on: ubuntu-latest
     needs: run-http-checks
@@ -67,31 +120,37 @@ jobs:
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.MTECH }}
+          fetch-depth: 0
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Download HTTP Status Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: http_status # Download all artifacts into this directory
-          # Pattern matching might be needed if names are specific
-          # pattern: http_status_features_*
-          # merge-multiple: true # If artifacts have the same name
 
-      - name: List downloaded files (debug)
-        run: ls -R http_status
+      - name: Pull latest changes
+        run: git pull origin main --rebase
+
+      - name: Verify HTTP Status Files Have Label
+        run: |
+          for file in http_status/*.csv; do
+            if [ -f "$file" ]; then
+              if ! head -1 "$file" | grep -q 'label'; then
+                echo "::error::Label column missing in HTTP status file: $file"
+                exit 1
+              fi
+            fi
+          done
 
       - name: Run Lexical Feature Extraction
         run: |
-          # Ensure the output directory exists
           mkdir -p lexical_features
-          # Find CSV files within the downloaded artifact subdirectories and run the extractor
-          # Note: download-artifact@v4 might place files in subdirs named after the artifact
+
+          # Process all HTTP status CSV files
           find http_status -name '*.csv' -type f | while read input_csv; do
             if [ -f "$input_csv" ]; then
               echo "Processing $input_csv with lexical_feature_extractor.py"
@@ -101,45 +160,31 @@ jobs:
             fi
           done
 
-          # Check if any output files were created
-          if [ -z "$(ls -A lexical_features/*.csv 2>/dev/null)" ]; then
-             echo "Warning: No lexical feature CSV files were generated."
-          fi
-      - name: Upload Lexical Features
-        uses: actions/upload-artifact@v4
-        with:
-          name: lexical_features
-          path: lexical_features/
-          if-no-files-found: warn
+      - name: Verify Lexical Features Output Contains Label
+        run: |
+          for file in lexical_features/*.csv; do
+            if [ -f "$file" ]; then
+              if ! head -1 "$file" | grep -q 'label'; then
+                echo "::error::Label column missing in lexical features file: $file"
+                exit 1
+              fi
+            fi
+          done
+
       - name: Commit and Push Lexical Feature Files
+        env:
+          GITHUB_TOKEN: ${{ secrets.MTECH }}
         run: |
           git config user.name "Ifeoluwa Oseni"
           git config user.email "ifeoseni@gmail.com"
+          git pull origin main --rebase
 
-          # Clean untracked files in lexical_features before pulling to avoid conflicts
-          echo "Cleaning untracked files in lexical_features/ directory..."
-          git clean -fdx lexical_features/
-          # Alternatively, if git clean is not desired: rm -rf lexical_features/*
-
-          # Pull latest changes first to avoid conflicts
-          echo "Pulling latest changes from origin main..."
-          git pull origin main --rebase || git pull origin main
-
-          # Add newly generated files if they exist
           if [ -d "lexical_features/" ] && [ "$(ls -A lexical_features/)" ]; then
-            echo "Adding lexical_features/ files to git..."
             git add lexical_features/
+            
             if ! git diff --cached --quiet; then
-              echo "Committing lexical feature updates..."
-              git commit -m "Auto-update: Lexical features"
-              
-              # Retry push with pull if it fails
-              echo "Pushing changes to origin main..."
-              git push origin main || {
-                echo "Push failed, pulling and retrying..."
-                git pull origin main --rebase
-                git push origin main
-              }
+              git commit -m "Auto-update: Lexical features [skip ci]"
+              git push origin HEAD:main
             else
               echo "No changes to commit for lexical features"
             fi
