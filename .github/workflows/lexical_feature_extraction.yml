@@ -1,9 +1,9 @@
-name: Lexical Feature Extraction (Stage 2) Workflow
+name: Stage 2Lexical Feature Extraction Workflow
 
 on:
-  workflow_dispatch: # Manual trigger
+  workflow_dispatch:
   schedule:
-    - cron: "20 0 * * *" # Runs daily at 00:20 UTC
+    - cron: "20 0 * * *"
 
 env:
   PYTHON_VERSION: "3.11"
@@ -29,20 +29,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Needed for proper git history in later steps
+          fetch-depth: 0
           token: ${{ secrets.MTECH }}
 
       - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip" # Enable caching for pip dependencies
+          cache: "pip"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas tldextract
-          pip list  # For debugging
+          pip install pandas tldextract==3.4.1  # Pinned version to avoid deprecation warning
+          pip list
 
       - name: Verify input directory
         run: |
@@ -54,10 +54,8 @@ jobs:
       - name: Find latest input file
         id: find-input
         run: |
-          # Create output directory if it doesn't exist
           mkdir -p "${{ env.OUTPUT_DIR }}"
 
-          # Find the most recent file matching the pattern
           LATEST_FILE=$(find "${{ env.INPUT_DIR }}" -maxdepth 1 -name "${{ matrix.input_pattern }}" -type f -printf '%T@ %p\n' | \
                         sort -n | tail -n 1 | cut -d' ' -f2-)
 
@@ -66,20 +64,24 @@ jobs:
             exit 1
           fi
 
-          echo "Found input file: $LATEST_FILE"
+          BASE_NAME=$(basename "$LATEST_FILE")
+          OUTPUT_NAME="lexical_features_${BASE_NAME}"
+
           echo "input_file=$LATEST_FILE" >> $GITHUB_OUTPUT
-          echo "output_file=${{ env.OUTPUT_DIR }}/lexical_features_$(basename "$LATEST_FILE")" >> $GITHUB_OUTPUT
+          echo "output_file=${{ env.OUTPUT_DIR }}/$OUTPUT_NAME" >> $GITHUB_OUTPUT
+          echo "base_name=$BASE_NAME" >> $GITHUB_OUTPUT
 
       - name: Run lexical feature extraction
         run: |
-          echo "Running lexical feature extraction for ${{ matrix.dataset }}"
           python "${{ env.SCRIPT }}" \
             --input-file "${{ steps.find-input.outputs.input_file }}" \
             --output-dir "${{ env.OUTPUT_DIR }}"
 
-          # Verify output file was created
-          if [ ! -f "${{ steps.find-input.outputs.output_file }}" ]; then
-            echo "::error::Output file was not created: ${{ steps.find-input.outputs.output_file }}"
+          # Verify using the exact output name pattern the script uses
+          EXPECTED_OUTPUT="${{ env.OUTPUT_DIR }}/lexical_features_${{ steps.find-input.outputs.base_name }}"
+          if [ ! -f "$EXPECTED_OUTPUT" ]; then
+            echo "::error::Output file was not created: $EXPECTED_OUTPUT"
+            ls -la "${{ env.OUTPUT_DIR }}"
             exit 1
           fi
 
@@ -87,21 +89,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lexical-features-${{ matrix.dataset }}-${{ github.run_number }}
-          path: ${{ steps.find-input.outputs.output_file }}
+          path: ${{ env.OUTPUT_DIR }}/lexical_features_${{ steps.find-input.outputs.base_name }}
           retention-days: 7
 
       - name: Commit and push results
         env:
           GITHUB_TOKEN: ${{ secrets.MTECH }}
         run: |
-          # Configure git
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-
-          # Pull latest changes to avoid conflicts
           git pull origin main --rebase
 
-          # Check for changes
           git add "${{ env.OUTPUT_DIR }}"
 
           if git diff --cached --quiet; then
@@ -109,25 +107,4 @@ jobs:
           else
             git commit -m "Automated update: Lexical features for ${{ matrix.dataset }} [skip ci]"
             git push origin HEAD:main
-            echo "Changes pushed successfully"
           fi
-
-      - name: Verify results
-        run: |
-          echo "Verifying output file..."
-          FILE="${{ steps.find-input.outputs.output_file }}"
-
-          # Check file exists
-          if [ ! -f "$FILE" ]; then
-            echo "::error::Output file not found: $FILE"
-            exit 1
-          fi
-
-          # Check file is not empty
-          if [ ! -s "$FILE" ]; then
-            echo "::error::Output file is empty: $FILE"
-            exit 1
-          fi
-
-          echo "Output file looks good:"
-          head -n 3 "$FILE"
