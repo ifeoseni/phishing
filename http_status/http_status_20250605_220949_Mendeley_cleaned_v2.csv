@@ -1,0 +1,15 @@
+url,label,http_status,is_active,has_redirect,error
+https://www.reddit.com,0,403,1,0,
+https://www.amazon.com,0,200,1,0,
+https://www.google.com,0,200,1,0,
+https://www.google.co.jp,0,200,1,0,
+https://www.facebook.com,0,400,1,0,
+https://www.twitter.com,0,400,1,0,HTTP Error: 400 Got more than 8190 bytes (10078) when reading Header value is too long.
+https://www.google.co.in,0,200,1,0,
+https://www.youtube.com,0,200,1,0,
+https://www.tmall.com,0,200,1,0,
+https://www.yahoo.com,0,200,1,0,
+https://www.wikipedia.org,0,200,1,0,
+https://www.taobao.com,0,200,1,0,
+https://www.qq.com,0,200,1,0,
+https://www.baidu.com,0,200,1,0,
