@@ -54,7 +54,8 @@ jobs:
           fi
 
           BASENAME=$(basename "$LATEST_INPUT_FILE")
-          OUTPUT_FILE_PATH="$OUTPUT_DIR/lexical_${BASENAME}"
+          # Use prefix lexical_features_ as output prefix (matching script output)
+          OUTPUT_FILE_PATH="$OUTPUT_DIR/lexical_features_${BASENAME}"
 
           echo "LATEST_INPUT_FILE=$LATEST_INPUT_FILE" >> $GITHUB_OUTPUT
           echo "OUTPUT_FILE_PATH=$OUTPUT_FILE_PATH" >> $GITHUB_OUTPUT
