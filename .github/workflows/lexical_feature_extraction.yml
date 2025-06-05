@@ -62,21 +62,18 @@ jobs:
           echo "Pulling latest changes from origin main..."
           git pull origin main --rebase || git pull origin main
 
-          if [ -d "lexical_features/" ] && [ "$(ls -A lexical_features/)" ]; then
-            echo "Adding lexical_features/ files to git..."
-            git add lexical_features/
-            if ! git diff --cached --quiet; then
-              echo "Committing lexical feature updates..."
-              git commit -m "Auto-update: Lexical feature extraction - $(date '+%Y-%m-%d %H:%M:%S')"
-              echo "Pushing changes to origin main..."
-              git push origin main || {
-                echo "Push failed, pulling and retrying..."
-                git pull origin main --rebase
-                git push origin main
-              }
-            else
-              echo "No changes to commit for lexical features"
-            fi
+          # Force Git to recognize lexical_features changes
+          git add -f lexical_features/
+
+          if ! git diff --cached --quiet; then
+            echo "Committing lexical feature updates..."
+            git commit -m "Auto-update: Lexical feature extraction - $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "Pushing changes to origin main..."
+            git push origin main || {
+              echo "Push failed, pulling and retrying..."
+              git pull origin main --rebase
+              git push origin main
+            }
           else
-            echo "No lexical feature files to commit"
+            echo "No changes to commit for lexical features"
           fi
