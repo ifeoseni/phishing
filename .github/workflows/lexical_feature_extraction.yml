@@ -1,12 +1,19 @@
-name: Lexical Feature Extraction Workflow
+name: Lexical Feature Extraction (Stage 2) Workflow
 
 on:
   workflow_dispatch: # Manual trigger
   schedule:
     - cron: "20 0 * * *" # Runs daily at 00:20 UTC
 
+env:
+  PYTHON_VERSION: "3.11"
+  INPUT_DIR: "http_status"
+  OUTPUT_DIR: "lexical_features"
+  SCRIPT: "lexical_feature_extractor.py"
+
 jobs:
-  run-lexical-extraction:
+  lexical-feature-extraction:
+    name: Extract Lexical Features (${{ matrix.dataset }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -22,70 +29,105 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.MTECH }} # Your PAT for pushing back to the repo
+          fetch-depth: 0 # Needed for proper git history in later steps
+          token: ${{ secrets.MTECH }}
 
-      - name: Set up Python
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip" # Enable caching for pip dependencies
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pandas tldextract
+          pip list  # For debugging
 
-      - name: Setup paths and find latest file
-        id: setup
+      - name: Verify input directory
         run: |
-          INPUT_DIR="http_status"
-          OUTPUT_DIR="lexical_features"
-          SCRIPT="lexical_feature_extractor.py"
-          INPUT_PATTERN="${{ matrix.input_pattern }}"
-
-          mkdir -p "$INPUT_DIR"
-          mkdir -p "$OUTPUT_DIR"
-
-          # Find the most recent file matching the pattern
-          LATEST_INPUT_FILE=$(find "$INPUT_DIR" -maxdepth 1 -name "$INPUT_PATTERN" -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)
-
-          if [ -z "$LATEST_INPUT_FILE" ]; then
-            echo "::error::No file found in $INPUT_DIR matching $INPUT_PATTERN"
+          if [ ! -d "${{ env.INPUT_DIR }}" ]; then
+            echo "::error::Input directory ${{ env.INPUT_DIR }} does not exist"
             exit 1
           fi
 
-          BASENAME=$(basename "$LATEST_INPUT_FILE")
-          # Use prefix lexical_features_ as output prefix (matching script output)
-          OUTPUT_FILE_PATH="$OUTPUT_DIR/lexical_features_${BASENAME}"
-
-          echo "LATEST_INPUT_FILE=$LATEST_INPUT_FILE" >> $GITHUB_OUTPUT
-          echo "OUTPUT_FILE_PATH=$OUTPUT_FILE_PATH" >> $GITHUB_OUTPUT
-          echo "SCRIPT=$SCRIPT" >> $GITHUB_OUTPUT
-
-      - name: Run Lexical Feature Extraction for ${{ matrix.dataset }}
+      - name: Find latest input file
+        id: find-input
         run: |
-          echo "Running: ${{ steps.setup.outputs.SCRIPT }}"
-          python "${{ steps.setup.outputs.SCRIPT }}" \
-            --input-file "${{ steps.setup.outputs.LATEST_INPUT_FILE }}" \
-            --output-dir "$(dirname "${{ steps.setup.outputs.OUTPUT_FILE_PATH }}")"
+          # Create output directory if it doesn't exist
+          mkdir -p "${{ env.OUTPUT_DIR }}"
 
-      - name: Upload Lexical Features
+          # Find the most recent file matching the pattern
+          LATEST_FILE=$(find "${{ env.INPUT_DIR }}" -maxdepth 1 -name "${{ matrix.input_pattern }}" -type f -printf '%T@ %p\n' | \
+                        sort -n | tail -n 1 | cut -d' ' -f2-)
+
+          if [ -z "$LATEST_FILE" ]; then
+            echo "::error::No file found in ${{ env.INPUT_DIR }} matching ${{ matrix.input_pattern }}"
+            exit 1
+          fi
+
+          echo "Found input file: $LATEST_FILE"
+          echo "input_file=$LATEST_FILE" >> $GITHUB_OUTPUT
+          echo "output_file=${{ env.OUTPUT_DIR }}/lexical_features_$(basename "$LATEST_FILE")" >> $GITHUB_OUTPUT
+
+      - name: Run lexical feature extraction
+        run: |
+          echo "Running lexical feature extraction for ${{ matrix.dataset }}"
+          python "${{ env.SCRIPT }}" \
+            --input-file "${{ steps.find-input.outputs.input_file }}" \
+            --output-dir "${{ env.OUTPUT_DIR }}"
+
+          # Verify output file was created
+          if [ ! -f "${{ steps.find-input.outputs.output_file }}" ]; then
+            echo "::error::Output file was not created: ${{ steps.find-input.outputs.output_file }}"
+            exit 1
+          fi
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lexical_features_${{ matrix.dataset }}_${{ github.run_id }}
-          path: ${{ steps.setup.outputs.OUTPUT_FILE_PATH }}
-          if-no-files-found: error
+          name: lexical-features-${{ matrix.dataset }}-${{ github.run_number }}
+          path: ${{ steps.find-input.outputs.output_file }}
+          retention-days: 7
 
-      - name: Commit and Push Lexical Feature Files
+      - name: Commit and push results
         env:
-          TOKEN: ${{ secrets.MTECH }}
+          GITHUB_TOKEN: ${{ secrets.MTECH }}
         run: |
-          git config user.name "Ifeoluwa Oseni"
-          git config user.email "ifeoseni@gmail.com"
+          # Configure git
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+          # Pull latest changes to avoid conflicts
           git pull origin main --rebase
 
-          git add lexical_features/
-          if ! git diff --cached --quiet; then
-            git commit -m "Auto-update: Lexical features for ${{ matrix.dataset }}"
-            git push https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git HEAD:main
+          # Check for changes
+          git add "${{ env.OUTPUT_DIR }}"
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
           else
-            echo "No changes to commit for ${{ matrix.dataset }}"
+            git commit -m "Automated update: Lexical features for ${{ matrix.dataset }} [skip ci]"
+            git push origin HEAD:main
+            echo "Changes pushed successfully"
+          fi
+
+      - name: Verify results
+        run: |
+          echo "Verifying output file..."
+          FILE="${{ steps.find-input.outputs.output_file }}"
+
+          # Check file exists
+          if [ ! -f "$FILE" ]; then
+            echo "::error::Output file not found: $FILE"
+            exit 1
+          fi
+
+          # Check file is not empty
+          if [ ! -s "$FILE" ]; then
+            echo "::error::Output file is empty: $FILE"
+            exit 1
+          fi
+
+          echo "Output file looks good:"
+          head -n 3 "$FILE"
