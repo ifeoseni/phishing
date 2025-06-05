@@ -1,63 +1,78 @@
-name: Stage 2 Lexical Feature Extraction
+name: Lexical Feature Extraction Workflow
 
 on:
+  workflow_dispatch: # Manual trigger
   schedule:
-    - cron: "20 0 * * *" # Runs daily at midnight UTC
-  workflow_dispatch: # Allows manual run from GitHub UI
+    - cron: "20 0 * * *" # Runs daily at 00:20 UTC
 
 jobs:
-  run-script:
+  run-lexical-extraction:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dataset: [phiusiil, mendeley]
+        include:
+          - dataset: phiusiil
+            input_pattern: "*PhiUSIIL*.csv"
+          - dataset: mendeley
+            input_pattern: "*Mendeley*.csv"
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.MTECH }} # Your PAT for pushing back to the repo
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pandas tldextract
 
-      - name: Run Lexical Feature Extraction on latest PhiUSIIL and Mendeley files
+      - name: Setup paths and find latest file
+        id: setup
         run: |
-          mkdir -p lexical_features
+          INPUT_DIR="http_status"
+          OUTPUT_DIR="lexical_features"
+          SCRIPT="lexical_feature_extractor.py"
+          INPUT_PATTERN="${{ matrix.input_pattern }}"
 
-          get_latest_file() {
-            pattern="$1"
-            latest=$(ls -t http_status/*"$pattern"*.csv 2>/dev/null | head -n 1)
-            if [ -f "$latest" ]; then
-              echo "$latest"
-            fi
-          }
+          mkdir -p "$INPUT_DIR"
+          mkdir -p "$OUTPUT_DIR"
 
-          latest_phiusiil=$(get_latest_file "PhiUSIIL")
-          latest_mendeley=$(get_latest_file "Mendeley")
+          # Find the most recent file matching the pattern
+          LATEST_INPUT_FILE=$(find "$INPUT_DIR" -maxdepth 1 -name "$INPUT_PATTERN" -type f -printf '%T@ %p\n' | sort -n | tail -n 1 | cut -d' ' -f2-)
 
-          if [ -n "$latest_phiusiil" ]; then
-            echo "Processing latest PhiUSIIL file: $latest_phiusiil"
-            python lexical_feature_extractor.py --input-file "$latest_phiusiil" --output-dir lexical_features
-          else
-            echo "No PhiUSIIL CSV file found."
+          if [ -z "$LATEST_INPUT_FILE" ]; then
+            echo "::error::No file found in $INPUT_DIR matching $INPUT_PATTERN"
+            exit 1
           fi
 
-          if [ -n "$latest_mendeley" ]; then
-            echo "Processing latest Mendeley file: $latest_mendeley"
-            python lexical_feature_extractor.py --input-file "$latest_mendeley" --output-dir lexical_features
-          else
-            echo "No Mendeley CSV file found."
-          fi
+          BASENAME=$(basename "$LATEST_INPUT_FILE")
+          OUTPUT_FILE_PATH="$OUTPUT_DIR/lexical_${BASENAME}"
+
+          echo "LATEST_INPUT_FILE=$LATEST_INPUT_FILE" >> $GITHUB_OUTPUT
+          echo "OUTPUT_FILE_PATH=$OUTPUT_FILE_PATH" >> $GITHUB_OUTPUT
+          echo "SCRIPT=$SCRIPT" >> $GITHUB_OUTPUT
+
+      - name: Run Lexical Feature Extraction for ${{ matrix.dataset }}
+        run: |
+          echo "Running: ${{ steps.setup.outputs.SCRIPT }}"
+          python "${{ steps.setup.outputs.SCRIPT }}" \
+            --input-file "${{ steps.setup.outputs.LATEST_INPUT_FILE }}" \
+            --output-dir "$(dirname "${{ steps.setup.outputs.OUTPUT_FILE_PATH }}")"
 
       - name: Upload Lexical Features
         uses: actions/upload-artifact@v4
         with:
-          name: lexical_features
-          path: lexical_features/
-          if-no-files-found: warn
+          name: lexical_features_${{ matrix.dataset }}_${{ github.run_id }}
+          path: ${{ steps.setup.outputs.OUTPUT_FILE_PATH }}
+          if-no-files-found: error
 
       - name: Commit and Push Lexical Feature Files
         env:
@@ -65,29 +80,11 @@ jobs:
         run: |
           git config user.name "Ifeoluwa Oseni"
           git config user.email "ifeoseni@gmail.com"
+          git pull origin main --rebase
 
-          echo "Cleaning untracked files in lexical_features/ directory..."
-          git clean -fdx lexical_features/
-
-          echo "Pulling latest changes from origin main..."
-          git pull origin main --rebase || git pull origin main
-
-          if [ -d "lexical_features/" ] && [ "$(ls -A lexical_features/)" ]; then
-            echo "Adding lexical_features/ files to git..."
-            git add lexical_features/
-            if ! git diff --cached --quiet; then
-              echo "Committing lexical feature updates..."
-              git commit -m "Auto-update: Lexical features"
-
-              echo "Pushing changes to origin main using PAT..."
-              git push https://x-access-token:${TOKEN}@github.com/ifeoseni/phishing.git main || {
-                echo "Push failed, pulling and retrying..."
-                git pull origin main --rebase
-                git push https://x-access-token:${TOKEN}@github.com/ifeoseni/phishing.git main
-              }
-            else
-              echo "No changes to commit for lexical features"
-            fi
+          git add lexical_features/
+          if ! git diff --cached --quiet; then
+            git commit -m "Auto-update: Lexical features for ${{ matrix.dataset }}"
+            git push https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git HEAD:main
           else
-            echo "No lexical feature files to commit"
-          fi
+            echo "No changes to commit for ${{ matrix.dataset }}"
