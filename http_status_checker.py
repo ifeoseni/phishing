@@ -123,78 +123,28 @@ async def check_url_status_async(session: aiohttp.ClientSession, semaphore: asyn
 
 async def process_urls_async(input_csv: str, output_dir: str):
     try:
-        # Read input CSV
-        df = pd.read_csv(input_csv, encoding='utf-8')
-        if 'url' not in df.columns:
-            raise ValueError(f"Input CSV '{input_csv}' must contain a 'url' column")
-
-        # Ensure label column exists (create empty if missing)
-        if 'label' not in df.columns:
-            df['label'] = ''
-
-        # Store original columns
-        original_columns = df.columns.tolist()
-        
-        # Process URLs
-        url_label_pairs = df[['url', 'label']].dropna().drop_duplicates().values.tolist()
-        log.info(f"Processing {len(url_label_pairs)} URLs from '{input_csv}'...")
-
-        # [Previous async processing code remains the same...]
-
-        # Create results DataFrame
-        status_df = pd.DataFrame(results)
-        
-        # Merge with original data to preserve all columns
-        output_df = df.merge(
-            status_df,
-            on=['url', 'label'],
-            how='left'
-        )
-
-        # Save results
-        os.makedirs(output_dir, exist_ok=True)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_filename = f"http_status_{timestamp}_{os.path.basename(input_csv)}"
-        output_path = os.path.join(output_dir, output_filename)
-        
-        output_df.to_csv(output_path, index=False)
-        log.info(f"Saved results to {output_path}")
-        
-        # DEBUG: Print columns to verify label is included
-        log.info(f"Output columns: {output_df.columns.tolist()}")
-        if len(output_df) > 0:
-            log.info(f"First row label value: {output_df.iloc[0]['label']}")
-        
-        return output_path
-
-    except Exception as e:
-        log.error(f"Error processing {input_csv}: {str(e)}")
-        return None
-async def process_urls_asyncOld(input_csv: str, output_dir: str):
-    try:
         # Read input CSV preserving all columns
         df = pd.read_csv(input_csv, encoding='utf-8')
         if 'url' not in df.columns:
             raise ValueError(f"Input CSV '{input_csv}' must contain a 'url' column")
-        
-        # Check if label exists in input
+
         has_label = 'label' in df.columns
-        
+
         # Create list of URLs to process
         if has_label:
             url_label_pairs = df[['url', 'label']].dropna().drop_duplicates().values.tolist()
         else:
             log.warning("Label column not found. Processing without labels.")
             url_label_pairs = [(url, '') for url in df['url'].dropna().unique()]
-        
+
         log.info(f"Processing {len(url_label_pairs)} unique URLs from '{input_csv}' for HTTP status...")
 
         results = []
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
-        
+
         connector = aiohttp.TCPConnector(
-            limit=MAX_CONCURRENT_REQUESTS, 
-            ssl=ssl_context, 
+            limit=MAX_CONCURRENT_REQUESTS,
+            ssl=ssl_context,
             resolver=aiohttp.AsyncResolver(),
             force_close=True,
             enable_cleanup_closed=True
@@ -204,7 +154,7 @@ async def process_urls_asyncOld(input_csv: str, output_dir: str):
             tasks = [check_url_status_async(session, semaphore, url, label) for url, label in url_label_pairs]
             log.info(f"Starting {len(tasks)} URL checks with concurrency {MAX_CONCURRENT_REQUESTS}...")
             start_time = datetime.now()
-            
+
             for i, future in enumerate(asyncio.as_completed(tasks)):
                 result = await future
                 results.append(result)
@@ -212,39 +162,36 @@ async def process_urls_asyncOld(input_csv: str, output_dir: str):
                     elapsed = (datetime.now() - start_time).total_seconds()
                     rate = (i + 1) / elapsed if elapsed > 0 else 0
                     log.info(f"Processed {i + 1}/{len(tasks)} URLs... (Rate: {rate:.2f} URLs/sec)")
-            
+
             end_time = datetime.now()
             total_time = (end_time - start_time).total_seconds()
             log.info(f"Finished processing {len(results)} URLs in {total_time:.2f} seconds.")
 
         # Create a DataFrame from the results
         status_df = pd.DataFrame(results)
-        
+
         # Merge results back with original DataFrame
         if has_label:
-            # Merge on both url and label
             df_merged = df.merge(status_df, on=['url', 'label'], how='left')
         else:
-            # Merge only on url
             df_merged = df.merge(status_df, on='url', how='left')
-            # Remove the temporary label column if it exists
             if 'label' in df_merged.columns:
                 df_merged = df_merged.drop(columns=['label'])
-        
+
         # Save results
         os.makedirs(output_dir, exist_ok=True)
         input_basename = os.path.basename(input_csv)
         timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
         output_filename = f"http_status_{timestamp_str}_{input_basename}"
         output_file = os.path.join(output_dir, output_filename)
-        
+
         df_merged.to_csv(output_file, index=False, encoding='utf-8')
         log.info(f"HTTP status results saved to {output_file}")
-        
+
         # Log the header for verification
         log.info(f"Output file header: {', '.join(df_merged.columns.tolist())}")
         log.info(f"Output file first row: {df_merged.iloc[0].to_dict() if len(df_merged) > 0 else 'No rows'}")
-        
+
         return output_file
 
     except Exception as e:
