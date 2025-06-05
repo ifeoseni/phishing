@@ -545,10 +545,10 @@ async def run_extraction(input_file: str, output_file: str):
             logger.error(f"Input file not found: {input_file}")
             return
         
-        # Read only necessary columns if possible, adjust based on actual needs
-        # Assuming 'url' is the key column needed from the input.
-        df = pd.read_csv(input_file, usecols=['url'])
+        # Read all columns from the input file
+        df = pd.read_csv(input_file)
         logger.info(f"Read {len(df)} rows from {input_file}")
+        logger.info(f"Input DF columns: {list(df.columns)}")
         
         # Basic cleaning
         df = df.dropna(subset=['url'])
@@ -625,43 +625,55 @@ async def run_extraction(input_file: str, output_file: str):
                 elapsed_time = time.time() - start_time
                 rate = completed_count / elapsed_time if elapsed_time > 0 else 0
                 logger.info(f"Progress: {completed_count}/{total_tasks} ({completed_count/total_tasks:.1%}) - {rate:.2f} URLs/sec - Elapsed: {elapsed_time:.2f}s")
-
     logger.info("All tasks completed. Combining results...")
-    
-    if not results_list:
-        logger.warning("No results were generated. Check logs for errors.")
-        executor.shutdown(wait=False) # Shutdown executor even if no results
-        return
-    
-    # Create DataFrame from the list of result dictionaries
-    network_df = pd.DataFrame(results_list)
-    
-    # Merge the original DataFrame (with URLs) with the network features
-    # Use 'original_url' from network_df to merge back with 'url' in the original df
-    final_df = pd.merge(df, network_df, left_on='url', right_on='original_url', how='left')
-    
-    # Remove the temporary 'original_url' column if it exists
-    if 'original_url' in final_df.columns:
-        final_df = final_df.drop(columns=['original_url'])
-        
-    # Fill NaN values in network feature columns with appropriate defaults (e.g., 0 or specific values)
-    # This ensures consistency in the output
-    fill_values = {k: v for k, v in NETWORK_FEATURE_DEFAULTS.items() if v is not None}
-    # Handle specific cases like expiry days if None means 'not applicable' vs 'error'
-    # For simplicity, filling numeric Nones with 0, but review if None has meaning
-    for col, default_val in NETWORK_FEATURE_DEFAULTS.items():
-        if col in final_df.columns:
-            if pd.api.types.is_numeric_dtype(final_df[col]):
-                 final_df[col] = final_df[col].fillna(0) # Fill numeric NaNs with 0
-            # Keep None for specific columns if intended (like ssl_expiry_days when no SSL)
-            # Example: if 'ssl_expiry_days' in final_df.columns:
-            #    final_df['ssl_expiry_days'] = final_df['ssl_expiry_days'].fillna(NETWORK_FEATURE_DEFAULTS['ssl_expiry_days'])
 
-    # Save output
+    if not results_list:
+        logger.warning("No results were generated. Check logs for errors. Saving original data only.")
+        # If no results, save the original cleaned DataFrame
+        final_df = df.copy() # Use the cleaned input df
+        logger.info(f"Final DF (original data only) columns: {list(final_df.columns)}")
+        # No network features to fill or columns to drop
+    else:
+        # Create DataFrame from the list of result dictionaries
+        network_df = pd.DataFrame(results_list)
+        logger.info(f"Network Features DF columns: {list(network_df.columns)}")
+
+        # Merge the original DataFrame (with URLs) with the network features
+        try:
+            final_df = pd.merge(df, network_df, left_on='url', right_on='original_url', how='left')
+            logger.info(f"After merge DF columns: {list(final_df.columns)}")
+
+            # Remove the temporary 'original_url' column if it exists and df is not empty
+            if not final_df.empty and 'original_url' in final_df.columns:
+                final_df = final_df.drop(columns=['original_url'])
+                logger.info(f"After dropping temp column DF columns: {list(final_df.columns)}")
+            elif final_df.empty:
+                 logger.warning("DataFrame is empty after merge.")
+
+            # Fill NaN values in network feature columns only if final_df is not empty
+            if not final_df.empty:
+                logger.info("Filling NaN values in network feature columns...")
+                # fill_values = {k: v for k, v in NETWORK_FEATURE_DEFAULTS.items() if v is not None} # Not actually used
+                for col, default_val in NETWORK_FEATURE_DEFAULTS.items():
+                    if col in final_df.columns:
+                        # Check if default is None, handle appropriately
+                        fill_val = default_val if default_val is not None else 0 # Default fill is 0 if NETWORK_FEATURE_DEFAULTS[col] is None
+                        if pd.api.types.is_numeric_dtype(final_df[col]):
+                             final_df[col] = final_df[col].fillna(fill_val)
+                        # Add handling for non-numeric if needed, though most network features are numeric/bool (0/1)
+                        # else:
+                        #     final_df[col] = final_df[col].fillna(str(fill_val)) # Example: fill non-numeric with string 	0	
+
+        except Exception as merge_err:
+            logger.error(f"Error during merge or post-processing: {merge_err}. Saving original data only.")
+            final_df = df.copy() # Fallback to original data on error
+            logger.info(f"Final DF (fallback to original data) columns: {list(final_df.columns)}")
+
+    # Save output (final_df should always be defined now)
     try:
         # Ensure output directory exists
         output_dir = os.path.dirname(output_file)
-        if output_dir:
+        if output_dir: # Check if output_dir is not empty (i.e., not just a filename in current dir)
             os.makedirs(output_dir, exist_ok=True)
             
         final_df.to_csv(output_file, index=False)
