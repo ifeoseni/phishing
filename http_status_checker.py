@@ -127,16 +127,7 @@ async def process_urls_async(input_csv: str, output_dir: str):
         if 'url' not in df.columns:
             raise ValueError(f"Input CSV '{input_csv}' must contain a 'url' column")
         
-        # Create a copy to store results
-        results_df = df.copy()
-        
-        # Add new columns for status results
-        results_df['http_status'] = 0
-        results_df['is_active'] = 0
-        results_df['has_redirect'] = 0
-        results_df['error'] = ''
-
-        # Check if label column exists
+        # Check if label exists in input
         has_label = 'label' in df.columns
         
         # Create list of URLs to process
@@ -180,22 +171,15 @@ async def process_urls_async(input_csv: str, output_dir: str):
         status_df = pd.DataFrame(results)
         
         # Merge results back with original DataFrame
-        merge_columns = ['url'] + (['label'] if has_label else [])
-        results_df = results_df.merge(
-            status_df, 
-            on=merge_columns,
-            how='left',
-            suffixes=('', '_new')
-        )
-        
-        # Update the status columns with new values
-        results_df['http_status'] = results_df['http_status_new'].fillna(0)
-        results_df['is_active'] = results_df['is_active_new'].fillna(0)
-        results_df['has_redirect'] = results_df['has_redirect_new'].fillna(0)
-        results_df['error'] = results_df['error_new'].fillna('')
-        
-        # Drop temporary columns
-        results_df = results_df.drop(columns=['http_status_new', 'is_active_new', 'has_redirect_new', 'error_new'])
+        if has_label:
+            # Merge on both url and label
+            df_merged = df.merge(status_df, on=['url', 'label'], how='left')
+        else:
+            # Merge only on url
+            df_merged = df.merge(status_df, on='url', how='left')
+            # Remove the temporary label column if it exists
+            if 'label' in df_merged.columns:
+                df_merged = df_merged.drop(columns=['label'])
         
         # Save results
         os.makedirs(output_dir, exist_ok=True)
@@ -204,11 +188,12 @@ async def process_urls_async(input_csv: str, output_dir: str):
         output_filename = f"http_status_{timestamp_str}_{input_basename}"
         output_file = os.path.join(output_dir, output_filename)
         
-        results_df.to_csv(output_file, index=False, encoding='utf-8')
+        df_merged.to_csv(output_file, index=False, encoding='utf-8')
         log.info(f"HTTP status results saved to {output_file}")
         
         # Log the header for verification
-        log.info(f"Output file header: {', '.join(results_df.columns.tolist())}")
+        log.info(f"Output file header: {', '.join(df_merged.columns.tolist())}")
+        log.info(f"Output file first row: {df_merged.iloc[0].to_dict() if len(df_merged) > 0 else 'No rows'}")
         
         return output_file
 
