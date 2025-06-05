@@ -129,13 +129,20 @@ async def process_urls_async(input_csv: str, output_dir: str):
             raise ValueError(f"Input CSV '{input_csv}' must contain a 'url' column")
 
         has_label = 'label' in df.columns
-
+        
+        # Store original columns to preserve them
+        original_columns = df.columns.tolist()
+        
         # Create list of URLs to process
         if has_label:
-            url_label_pairs = df[['url', 'label']].dropna().drop_duplicates().values.tolist()
+            # Create pairs with actual labels from the dataset
+            url_label_pairs = df[['url', 'label']].dropna(subset=['url']).drop_duplicates().values.tolist()
+            log.info(f"Found label column. Processing {len(url_label_pairs)} unique URL-label pairs.")
         else:
-            log.warning("Label column not found. Processing without labels.")
-            url_label_pairs = [(url, '') for url in df['url'].dropna().unique()]
+            # Create pairs with empty labels
+            unique_urls = df['url'].dropna().unique()
+            url_label_pairs = [(url, '') for url in unique_urls]
+            log.info(f"No label column found. Processing {len(url_label_pairs)} unique URLs without labels.")
 
         log.info(f"Processing {len(url_label_pairs)} unique URLs from '{input_csv}' for HTTP status...")
 
@@ -169,14 +176,26 @@ async def process_urls_async(input_csv: str, output_dir: str):
 
         # Create a DataFrame from the results
         status_df = pd.DataFrame(results)
+        
+        # If no label column in original data, remove empty label column from results
+        if not has_label:
+            status_df = status_df.drop(columns=['label'])
 
         # Merge results back with original DataFrame
         if has_label:
+            # Merge on both url and label to maintain accuracy
             df_merged = df.merge(status_df, on=['url', 'label'], how='left')
         else:
+            # Merge only on url
             df_merged = df.merge(status_df, on='url', how='left')
-            if 'label' in df_merged.columns:
-                df_merged = df_merged.drop(columns=['label'])
+
+        # Ensure all original columns are preserved in the same order
+        new_columns = [col for col in original_columns]  # Original columns first
+        for col in status_df.columns:  # Then add new columns
+            if col not in new_columns:
+                new_columns.append(col)
+        
+        df_merged = df_merged.reindex(columns=new_columns)
 
         # Save results
         os.makedirs(output_dir, exist_ok=True)
@@ -190,7 +209,9 @@ async def process_urls_async(input_csv: str, output_dir: str):
 
         # Log the header for verification
         log.info(f"Output file header: {', '.join(df_merged.columns.tolist())}")
-        log.info(f"Output file first row: {df_merged.iloc[0].to_dict() if len(df_merged) > 0 else 'No rows'}")
+        log.info(f"Output file shape: {df_merged.shape}")
+        if len(df_merged) > 0:
+            log.info(f"Output file first row sample: url={df_merged.iloc[0].get('url', 'N/A')}, label={df_merged.iloc[0].get('label', 'N/A')}")
 
         return output_file
 
