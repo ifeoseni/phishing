@@ -75,11 +75,12 @@ def was_redirected_outside_domain(original_url: str, history: tuple) -> bool:
                     return True
     return False
 
-async def check_url_status_async(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, url: str) -> dict:
+# async def check_url_status_async(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, url: str) -> dict:
+async def check_url_status_async(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, url: str, label: str) -> dict:
     """Asynchronously check HTTP response status and activity for a single URL."""
     result = {
         'url': url,
-        'label', label,
+        'label': label,
         'http_status': 0,
         'is_active': 0,
         'has_redirect': 0,
@@ -150,7 +151,9 @@ async def process_urls_async(input_csv: str, output_dir: str):
         )
 
         async with aiohttp.ClientSession(connector=connector) as session:
-            tasks = [check_url_status_async(session, semaphore, url) for url in urls]
+            # tasks = [check_url_status_async(session, semaphore, url) for url in urls]
+            tasks = [check_url_status_async(session, semaphore, url, label) for url, label in url_label_pairs]
+
             log.info(f"Starting {len(tasks)} URL checks with concurrency {MAX_CONCURRENT_REQUESTS}...")
             start_time = datetime.now()
             
