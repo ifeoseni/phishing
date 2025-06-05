@@ -71,10 +71,9 @@ def was_redirected_outside_domain(original_url: str, history: tuple) -> bool:
                     return True
     return False
 
-async def check_url_status_async(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, url: str, label: str) -> dict:
+async def check_url_status_async(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, url: str) -> dict:
     result = {
         'url': url,
-        'label': label,
         'http_status': 0,
         'is_active': 0,
         'has_redirect': 0,
@@ -124,27 +123,16 @@ async def check_url_status_async(session: aiohttp.ClientSession, semaphore: asyn
 async def process_urls_async(input_csv: str, output_dir: str):
     try:
         # Read input CSV preserving all columns
-        df = pd.read_csv(input_csv, encoding='utf-8')
-        if 'url' not in df.columns:
+        df_original = pd.read_csv(input_csv, encoding='utf-8')
+        if 'url' not in df_original.columns:
             raise ValueError(f"Input CSV '{input_csv}' must contain a 'url' column")
 
-        has_label = 'label' in df.columns
+        has_label = 'label' in df_original.columns
+        log.info(f"Input file has {len(df_original)} rows and {'includes' if has_label else 'does not include'} a label column")
         
-        # Store original columns to preserve them
-        original_columns = df.columns.tolist()
-        
-        # Create list of URLs to process
-        if has_label:
-            # Create pairs with actual labels from the dataset
-            url_label_pairs = df[['url', 'label']].dropna(subset=['url']).drop_duplicates().values.tolist()
-            log.info(f"Found label column. Processing {len(url_label_pairs)} unique URL-label pairs.")
-        else:
-            # Create pairs with empty labels
-            unique_urls = df['url'].dropna().unique()
-            url_label_pairs = [(url, '') for url in unique_urls]
-            log.info(f"No label column found. Processing {len(url_label_pairs)} unique URLs without labels.")
-
-        log.info(f"Processing {len(url_label_pairs)} unique URLs from '{input_csv}' for HTTP status...")
+        # Get unique URLs for processing (we'll process each URL only once)
+        unique_urls = df_original['url'].dropna().unique()
+        log.info(f"Found {len(unique_urls)} unique URLs to process")
 
         results = []
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
@@ -158,7 +146,7 @@ async def process_urls_async(input_csv: str, output_dir: str):
         )
 
         async with aiohttp.ClientSession(connector=connector) as session:
-            tasks = [check_url_status_async(session, semaphore, url, label) for url, label in url_label_pairs]
+            tasks = [check_url_status_async(session, semaphore, url) for url in unique_urls]
             log.info(f"Starting {len(tasks)} URL checks with concurrency {MAX_CONCURRENT_REQUESTS}...")
             start_time = datetime.now()
 
@@ -172,31 +160,46 @@ async def process_urls_async(input_csv: str, output_dir: str):
 
             end_time = datetime.now()
             total_time = (end_time - start_time).total_seconds()
-            log.info(f"Finished processing {len(results)} URLs in {total_time:.2f} seconds.")
+            log.info(f"Finished processing {len(results)} URLs in {total_seconds:.2f} seconds.")
 
-        # Create a DataFrame from the results
+        # Create DataFrame from results
         status_df = pd.DataFrame(results)
-        
-        # If no label column in original data, remove empty label column from results
-        if not has_label:
-            status_df = status_df.drop(columns=['label'])
+        log.info(f"Created status DataFrame with {len(status_df)} rows and columns: {list(status_df.columns)}")
 
-        # Merge results back with original DataFrame
+        # Merge results back with original DataFrame using left join to preserve all original rows
+        df_merged = df_original.merge(status_df, on='url', how='left')
+        
+        log.info(f"After merge: {len(df_merged)} rows with columns: {list(df_merged.columns)}")
+        
+        # Verify that label column is preserved if it existed
+        if has_label and 'label' not in df_merged.columns:
+            log.error("CRITICAL: Label column was lost during merge!")
+            # Emergency fallback - reconstruct the merge manually
+            df_merged = df_original.copy()
+            status_dict = status_df.set_index('url').to_dict('index')
+            
+            for idx, row in df_merged.iterrows():
+                url = row['url']
+                if pd.notna(url) and url in status_dict:
+                    for col, val in status_dict[url].items():
+                        if col != 'url':  # Don't overwrite URL column
+                            df_merged.at[idx, col] = val
+                else:
+                    # Fill with default values for URLs that weren't processed
+                    df_merged.at[idx, 'http_status'] = 0
+                    df_merged.at[idx, 'is_active'] = 0
+                    df_merged.at[idx, 'has_redirect'] = 0
+                    df_merged.at[idx, 'error'] = 'Not processed'
+            
+            log.info(f"Manual merge completed. Final columns: {list(df_merged.columns)}")
+
+        # Final verification
         if has_label:
-            # Merge on both url and label to maintain accuracy
-            df_merged = df.merge(status_df, on=['url', 'label'], how='left')
-        else:
-            # Merge only on url
-            df_merged = df.merge(status_df, on='url', how='left')
-
-        # Ensure all original columns are preserved in the same order
-        new_columns = [col for col in original_columns]  # Original columns first
-        for col in status_df.columns:  # Then add new columns
-            if col not in new_columns:
-                new_columns.append(col)
+            if 'label' in df_merged.columns:
+                log.info(f"✓ Label column preserved successfully with {df_merged['label'].notna().sum()} non-null values")
+            else:
+                log.error("✗ FAILED: Label column is missing from final output!")
         
-        df_merged = df_merged.reindex(columns=new_columns)
-
         # Save results
         os.makedirs(output_dir, exist_ok=True)
         input_basename = os.path.basename(input_csv)
@@ -207,11 +210,11 @@ async def process_urls_async(input_csv: str, output_dir: str):
         df_merged.to_csv(output_file, index=False, encoding='utf-8')
         log.info(f"HTTP status results saved to {output_file}")
 
-        # Log the header for verification
-        log.info(f"Output file header: {', '.join(df_merged.columns.tolist())}")
-        log.info(f"Output file shape: {df_merged.shape}")
+        # Final verification log
+        log.info(f"Final output - Shape: {df_merged.shape}, Columns: {list(df_merged.columns)}")
         if len(df_merged) > 0:
-            log.info(f"Output file first row sample: url={df_merged.iloc[0].get('url', 'N/A')}, label={df_merged.iloc[0].get('label', 'N/A')}")
+            sample_row = df_merged.iloc[0]
+            log.info(f"Sample row: url={sample_row.get('url', 'N/A')}, label={sample_row.get('label', 'N/A')}, http_status={sample_row.get('http_status', 'N/A')}")
 
         return output_file
 
