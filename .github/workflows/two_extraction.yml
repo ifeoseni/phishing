@@ -1,4 +1,4 @@
-name: Stage 1 And 2 To Run HTTP Status Code Check For The 2 Datasets and Lexical Analysis
+name: Stage 1 And 2 to Run HTTP Status Code Check and Lexical Analysis
 on:
   schedule:
     - cron: "30 22 * * *" # 22:30 UTC = 23:30 Lagos (WAT)
@@ -17,6 +17,7 @@ jobs:
         run: |
           for file in cleaned_data/*.csv; do
             if [ -f "$file" ]; then
+              echo "Verifying columns in $file"
               if ! head -1 "$file" | grep -q 'url'; then
                 echo "::error::Input file $file is missing 'url' column"
                 exit 1
@@ -25,6 +26,7 @@ jobs:
                 echo "::error::Input file $file is missing 'label' column"
                 exit 1
               fi
+              echo "Verified columns in $file"
             fi
           done
 
@@ -60,7 +62,6 @@ jobs:
       - name: Run HTTP Status Checker for ${{ matrix.input_file }}
         id: run_checker
         run: |
-          # Use absolute path to ensure correct file access
           ABS_INPUT_FILE="$(realpath "${{ matrix.input_file }}")"
           INPUT_BASENAME=$(basename "$ABS_INPUT_FILE" .csv)
 
@@ -79,15 +80,21 @@ jobs:
           echo "output_file=${OUTPUT_FILE}" >> "$GITHUB_OUTPUT"
           echo "input_basename=${INPUT_BASENAME}" >> "$GITHUB_OUTPUT"
 
-      - name: Verify HTTP Status Output Contains Label
+      - name: Verify HTTP Status Output Contains All Columns
         run: |
-          echo "Checking for label column in ${{ steps.run_checker.outputs.output_file }}"
-          if head -1 "${{ steps.run_checker.outputs.output_file }}" | grep -q 'label'; then
-            echo "Label column found in output"
-          else
-            echo "::error::Label column missing in HTTP status output"
-            exit 1
-          fi
+          OUTPUT_FILE="${{ steps.run_checker.outputs.output_file }}"
+          echo "Verifying columns in $OUTPUT_FILE"
+
+          # Check required columns
+          REQUIRED_COLUMNS=("url" "label" "http_status" "is_active" "has_redirect")
+          for col in "${REQUIRED_COLUMNS[@]}"; do
+            if ! head -1 "$OUTPUT_FILE" | grep -q "$col"; then
+              echo "::error::Column '$col' missing in HTTP status output"
+              echo "File header: $(head -1 "$OUTPUT_FILE")"
+              exit 1
+            fi
+          done
+          echo "All required columns present in output"
 
       - name: Upload HTTP Status Features for ${{ matrix.input_file }}
         uses: actions/upload-artifact@v4
@@ -135,14 +142,18 @@ jobs:
       - name: Pull latest changes
         run: git pull origin main --rebase
 
-      - name: Verify HTTP Status Files Have Label
+      - name: Verify HTTP Status Files Have Required Columns
         run: |
           for file in http_status/*.csv; do
             if [ -f "$file" ]; then
-              if ! head -1 "$file" | grep -q 'label'; then
-                echo "::error::Label column missing in HTTP status file: $file"
-                exit 1
-              fi
+              echo "Verifying columns in $file"
+              REQUIRED_COLUMNS=("url" "label")
+              for col in "${REQUIRED_COLUMNS[@]}"; do
+                if ! head -1 "$file" | grep -q "$col"; then
+                  echo "::error::Column '$col' missing in HTTP status file: $file"
+                  exit 1
+                fi
+              done
             fi
           done
 
