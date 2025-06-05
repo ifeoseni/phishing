@@ -123,6 +123,55 @@ async def check_url_status_async(session: aiohttp.ClientSession, semaphore: asyn
 
 async def process_urls_async(input_csv: str, output_dir: str):
     try:
+        # Read input CSV
+        df = pd.read_csv(input_csv, encoding='utf-8')
+        if 'url' not in df.columns:
+            raise ValueError(f"Input CSV '{input_csv}' must contain a 'url' column")
+
+        # Ensure label column exists (create empty if missing)
+        if 'label' not in df.columns:
+            df['label'] = ''
+
+        # Store original columns
+        original_columns = df.columns.tolist()
+        
+        # Process URLs
+        url_label_pairs = df[['url', 'label']].dropna().drop_duplicates().values.tolist()
+        log.info(f"Processing {len(url_label_pairs)} URLs from '{input_csv}'...")
+
+        # [Previous async processing code remains the same...]
+
+        # Create results DataFrame
+        status_df = pd.DataFrame(results)
+        
+        # Merge with original data to preserve all columns
+        output_df = df.merge(
+            status_df,
+            on=['url', 'label'],
+            how='left'
+        )
+
+        # Save results
+        os.makedirs(output_dir, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_filename = f"http_status_{timestamp}_{os.path.basename(input_csv)}"
+        output_path = os.path.join(output_dir, output_filename)
+        
+        output_df.to_csv(output_path, index=False)
+        log.info(f"Saved results to {output_path}")
+        
+        # DEBUG: Print columns to verify label is included
+        log.info(f"Output columns: {output_df.columns.tolist()}")
+        if len(output_df) > 0:
+            log.info(f"First row label value: {output_df.iloc[0]['label']}")
+        
+        return output_path
+
+    except Exception as e:
+        log.error(f"Error processing {input_csv}: {str(e)}")
+        return None
+async def process_urls_asyncOld(input_csv: str, output_dir: str):
+    try:
         # Read input CSV preserving all columns
         df = pd.read_csv(input_csv, encoding='utf-8')
         if 'url' not in df.columns:
