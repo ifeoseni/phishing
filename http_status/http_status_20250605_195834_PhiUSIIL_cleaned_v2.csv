@@ -1,0 +1,15 @@
+url,label,http_status,is_active,has_redirect,error
+https://www.hyderabadonline.in,1,403,1,0,
+https://www.nerdscandy.com,1,200,1,0,
+https://www.sfnmjournal.com,1,403,1,0,
+https://www.religionenlibertad.com,1,200,1,0,
+https://www.saffronart.com,1,200,1,0,
+https://www.aap.org,1,200,1,0,
+https://www.aoh61.com,1,200,1,1,
+https://www.globalreporting.org,1,200,1,0,
+https://www.socialpolicy.org,1,200,1,0,
+https://www.voicefmradio.co.uk,1,200,1,0,
+https://www.southbankmosaics.com,1,200,1,0,
+https://www.uni-mainz.de,1,200,1,0,
+https://www.rewildingargentina.org,1,200,1,0,
+http://www.teramill.com,0,0,0,0,Timeout
