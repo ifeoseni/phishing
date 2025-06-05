@@ -46,7 +46,7 @@ def get_top_domain(url: str) -> str:
         parsed = urlparse(url)
         domain_part = parsed.netloc.split(':')[0]
         if not domain_part:
-             domain_part = parsed.path.split('/')[0].split(':')[0]
+            domain_part = parsed.path.split('/')[0].split(':')[0]
         extracted = tldextract.extract(domain_part)
         return extracted.top_domain_under_public_suffix
     except Exception as e:
@@ -72,12 +72,53 @@ def was_redirected_outside_domain(original_url: str, history: tuple) -> bool:
     return False
 
 async def check_url_status_async(session: aiohttp.ClientSession, semaphore: asyncio.Semaphore, url: str, label: str) -> dict:
-    return {
+    result = {
+        'url': url,
         'http_status': 0,
         'is_active': 0,
         'has_redirect': 0,
         'error': ''
     }
+    
+    url_with_scheme = ensure_url_scheme(url)
+    if not url_with_scheme:
+        result['error'] = 'Invalid URL format'
+        return result
+
+    headers = {'User-Agent': USER_AGENT}
+    
+    async with semaphore:
+        try:
+            async with session.get(url_with_scheme, headers=headers, timeout=REQUEST_TIMEOUT, 
+                                   allow_redirects=True, ssl=ssl_context) as response:
+                result['http_status'] = response.status
+                result['is_active'] = 1
+                if response.history:
+                    result['has_redirect'] = 1 if was_redirected_outside_domain(url_with_scheme, response.history) else 0
+                else:
+                    result['has_redirect'] = 0
+        except asyncio.TimeoutError:
+            result['error'] = 'Timeout'
+            log.debug(f"Timeout for {url}")
+        except aiohttp.ClientConnectorCertificateError as e:
+            result['error'] = f'SSL Certificate Error: {e.os_error}'
+            log.debug(f"SSL Cert Error for {url}: {e}")
+        except aiohttp.ClientConnectorError as e:
+            result['error'] = f'Connection Error: {e.os_error}' 
+            log.debug(f"Connection Error for {url}: {e}")
+        except aiohttp.ClientResponseError as e:
+            result['http_status'] = e.status
+            result['is_active'] = 1
+            result['error'] = f'HTTP Error: {e.status} {e.message}'
+            log.debug(f"HTTP Error for {url}: {e.status}")
+        except aiohttp.TooManyRedirects:
+            result['error'] = 'Too Many Redirects'
+            result['is_active'] = 1
+            log.debug(f"Too many redirects for {url}")
+        except Exception as e:
+            result['error'] = f'Unexpected Error: {type(e).__name__} - {e}'
+            log.warning(f"Unexpected error for {url}: {type(e).__name__} - {e}")
+    return result
 
 async def process_urls_async(input_csv: str, output_dir: str):
     try:
@@ -85,10 +126,6 @@ async def process_urls_async(input_csv: str, output_dir: str):
         df = pd.read_csv(input_csv, encoding='utf-8')
         if 'url' not in df.columns:
             raise ValueError(f"Input CSV '{input_csv}' must contain a 'url' column")
-        
-        if 'label' not in df.columns:
-            log.warning("'label' column not found. Creating one with default 'unknown' value")
-            df['label'] = 'unknown'
         
         # Create a copy to store results
         results_df = df.copy()
@@ -99,8 +136,17 @@ async def process_urls_async(input_csv: str, output_dir: str):
         results_df['has_redirect'] = 0
         results_df['error'] = ''
 
-        url_label_pairs = df[['url', 'label']].dropna().drop_duplicates().values.tolist()
-        log.info(f"Processing {len(url_label_pairs)} unique URL-label pairs from '{input_csv}' for HTTP status...")
+        # Check if label column exists
+        has_label = 'label' in df.columns
+        
+        # Create list of URLs to process
+        if has_label:
+            url_label_pairs = df[['url', 'label']].dropna().drop_duplicates().values.tolist()
+        else:
+            log.warning("Label column not found. Processing without labels.")
+            url_label_pairs = [(url, '') for url in df['url'].dropna().unique()]
+        
+        log.info(f"Processing {len(url_label_pairs)} unique URLs from '{input_csv}' for HTTP status...")
 
         results = []
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
@@ -134,10 +180,10 @@ async def process_urls_async(input_csv: str, output_dir: str):
         status_df = pd.DataFrame(results)
         
         # Merge results back with original DataFrame
+        merge_columns = ['url'] + (['label'] if has_label else [])
         results_df = results_df.merge(
             status_df, 
-            left_on=['url', 'label'],
-            right_on=['url', 'label'],
+            on=merge_columns,
             how='left',
             suffixes=('', '_new')
         )
@@ -161,7 +207,7 @@ async def process_urls_async(input_csv: str, output_dir: str):
         results_df.to_csv(output_file, index=False, encoding='utf-8')
         log.info(f"HTTP status results saved to {output_file}")
         
-        # Print the header for verification
+        # Log the header for verification
         log.info(f"Output file header: {', '.join(results_df.columns.tolist())}")
         
         return output_file
