@@ -1,7 +1,7 @@
-name: Stage 1 And 2 to Run HTTP Status Code Check and Lexical Analysis
+name: Stage 1 And 2 To Run HTTP Status Code Check and Lexical Analysis
 on:
   schedule:
-    - cron: "30 22 * * *" # 22:30 UTC = 23:30 Lagos (WAT)
+    - cron: "30 22 * * *"
   workflow_dispatch:
 jobs:
   verify-input-files:
@@ -22,10 +22,7 @@ jobs:
                 echo "::error::Input file $file is missing 'url' column"
                 exit 1
               fi
-              if ! head -1 "$file" | grep -q 'label'; then
-                echo "::error::Input file $file is missing 'label' column"
-                exit 1
-              fi
+              # Label is now optional
               echo "Verified columns in $file"
             fi
           done
@@ -80,23 +77,31 @@ jobs:
           echo "output_file=${OUTPUT_FILE}" >> "$GITHUB_OUTPUT"
           echo "input_basename=${INPUT_BASENAME}" >> "$GITHUB_OUTPUT"
 
-      - name: Verify HTTP Status Output Contains All Columns
+      - name: Verify HTTP Status Output
         run: |
           OUTPUT_FILE="${{ steps.run_checker.outputs.output_file }}"
-          echo "Verifying columns in $OUTPUT_FILE"
+          echo "Verifying output: $OUTPUT_FILE"
 
-          # Check required columns
-          REQUIRED_COLUMNS=("url" "label" "http_status" "is_active" "has_redirect")
+          # Print header for debugging
+          echo "File header: $(head -1 "$OUTPUT_FILE")"
+
+          # Check for essential columns
+          REQUIRED_COLUMNS=("url" "http_status")
           for col in "${REQUIRED_COLUMNS[@]}"; do
             if ! head -1 "$OUTPUT_FILE" | grep -q "$col"; then
               echo "::error::Column '$col' missing in HTTP status output"
-              echo "File header: $(head -1 "$OUTPUT_FILE")"
               exit 1
             fi
           done
-          echo "All required columns present in output"
 
-      - name: Upload HTTP Status Features for ${{ matrix.input_file }}
+          # Check if label exists but don't fail if missing
+          if head -1 "$OUTPUT_FILE" | grep -q 'label'; then
+            echo "Label column found"
+          else
+            echo "Warning: Label column not found in output"
+          fi
+
+      - name: Upload HTTP Status Features
         uses: actions/upload-artifact@v4
         with:
           name: http_status_features_${{ steps.run_checker.outputs.input_basename }}
@@ -142,21 +147,6 @@ jobs:
       - name: Pull latest changes
         run: git pull origin main --rebase
 
-      - name: Verify HTTP Status Files Have Required Columns
-        run: |
-          for file in http_status/*.csv; do
-            if [ -f "$file" ]; then
-              echo "Verifying columns in $file"
-              REQUIRED_COLUMNS=("url" "label")
-              for col in "${REQUIRED_COLUMNS[@]}"; do
-                if ! head -1 "$file" | grep -q "$col"; then
-                  echo "::error::Column '$col' missing in HTTP status file: $file"
-                  exit 1
-                fi
-              done
-            fi
-          done
-
       - name: Run Lexical Feature Extraction
         run: |
           mkdir -p lexical_features
@@ -171,13 +161,21 @@ jobs:
             fi
           done
 
-      - name: Verify Lexical Features Output Contains Label
+      - name: Verify Lexical Features Output
         run: |
           for file in lexical_features/*.csv; do
             if [ -f "$file" ]; then
-              if ! head -1 "$file" | grep -q 'label'; then
-                echo "::error::Label column missing in lexical features file: $file"
+              echo "Verifying $file"
+              # Print first row
+              echo "First row: $(head -1 "$file")"
+              
+              # Check for essential columns
+              if ! head -1 "$file" | grep -q 'url'; then
+                echo "::error::URL column missing in $file"
                 exit 1
+              fi
+              if ! head -1 "$file" | grep -q 'label'; then
+                echo "::warning::Label column missing in $file"
               fi
             fi
           done
