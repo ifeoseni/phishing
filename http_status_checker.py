@@ -137,8 +137,8 @@ async def process_urls_async(input_csv: str, output_dir: str):
         
         # urls = df['url'].dropna().unique().tolist()
         url_label_pairs = df[['url', 'label']].dropna().drop_duplicates().values.tolist()
-        log.info(f"Processing {len(urls)} unique URLs from '{input_csv}' for HTTP status...")
-        
+        log.info(f"Processing {len(url_label_pairs)} unique URL-label pairs from '{input_csv}' for HTTP status...")
+
         results = []
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
         
