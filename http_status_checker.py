@@ -79,6 +79,7 @@ async def check_url_status_async(session: aiohttp.ClientSession, semaphore: asyn
     """Asynchronously check HTTP response status and activity for a single URL."""
     result = {
         'url': url,
+        'label', label,
         'http_status': 0,
         'is_active': 0,
         'has_redirect': 0,
@@ -133,7 +134,8 @@ async def process_urls_async(input_csv: str, output_dir: str):
         if 'url' not in df.columns:
             raise ValueError(f"Input CSV '{input_csv}' must contain a 'url' column")
         
-        urls = df['url'].dropna().unique().tolist()
+        # urls = df['url'].dropna().unique().tolist()
+        url_label_pairs = df[['url', 'label']].dropna().drop_duplicates().values.tolist()
         log.info(f"Processing {len(urls)} unique URLs from '{input_csv}' for HTTP status...")
         
         results = []
