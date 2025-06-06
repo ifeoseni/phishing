@@ -40,7 +40,7 @@ def get_url_components(url):
         domain = extracted.domain
         subdomain = extracted.subdomain
         suffix = extracted.suffix # TLD
-        registered_domain = extracted.registered_domain # domain + suffix
+        registered_domain = extracted.top_domain_under_public_suffix #extracted.registered_domain # domain + suffix
         path = parsed.path
         query = parsed.query
         fragment = parsed.fragment

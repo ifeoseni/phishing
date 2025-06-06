@@ -101,13 +101,32 @@ jobs:
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git pull origin main --rebase
 
-          git add "${{ env.OUTPUT_DIR }}"
+          # Add files only if OUTPUT_DIR exists and is not empty
+          if [ -d "${{ env.OUTPUT_DIR }}" ] && [ "$(ls -A "${{ env.OUTPUT_DIR }}")" ]; then
+            git add "${{ env.OUTPUT_DIR }}"
 
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
+            # Commit if changes exist
+            if git diff --cached --quiet; then
+              echo "No changes to commit"
+            else
+              git commit -m "Automated update: Lexical features for ${{ matrix.dataset }} [skip ci]"
+            fi
           else
-            git commit -m "Automated update: Lexical features for ${{ matrix.dataset }} [skip ci]"
+            echo "No output directory or files to commit"
+          fi
+
+          # Pull only if repo is clean
+          if git diff --quiet && git diff --cached --quiet; then
+            git pull --rebase origin main
+          else
+            echo "Skipping pull due to local changes"
+          fi
+
+          # Push only if there are new commits
+          if git log origin/main..HEAD --oneline | grep .; then
             git push origin HEAD:main
+            echo "Changes pushed successfully"
+          else
+            echo "Nothing to push"
           fi

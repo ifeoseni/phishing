@@ -80,21 +80,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.MTECH }} # Use PAT for authentication
         run: |
-          # Configure git with your personal credentials
           git config user.name "Ifeoluwa Oseni"
           git config user.email "ifeoseni@gmail.com"
 
-          # Pull latest changes to avoid conflicts
-          git pull origin main --rebase
+          # Add changes first
+          if [ -d "network_data_with_lexical_features/" ] && [ "$(ls -A network_data_with_lexical_features/)" ]; then
+            git add network_data_with_lexical_features/
 
-          # Add changes
-          git add network_data_with_lexical_features/
-
-          # Check for changes before committing
-          if git diff --cached --quiet; then
-            echo "No changes to commit for ${{ matrix.dataset }}"
+            # Check if there's anything to commit
+            if git diff --cached --quiet; then
+              echo "No changes to commit for ${{ matrix.dataset }}"
+            else
+              git commit -m "Auto-update: Network features for ${{ matrix.dataset }} [skip ci]"
+            fi
           else
-            git commit -m "Auto-update: Network features for ${{ matrix.dataset }} [skip ci]"
+            echo "No network feature files to commit"
+          fi
+
+          # Only pull if repo is clean (prevents rebase errors)
+          if git diff --quiet && git diff --cached --quiet; then
+            git pull --rebase origin main
+          else
+            echo "Skipping pull due to uncommitted changes"
+          fi
+
+          # Push if commits exist
+          if git log origin/main..HEAD --oneline | grep .; then
             git push origin HEAD:main
             echo "Changes pushed successfully"
+          else
+            echo "Nothing to push"
           fi

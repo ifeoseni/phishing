@@ -152,17 +152,20 @@ jobs:
         run: |
           git config user.name "Ifeoluwa Oseni"
           git config user.email "ifeoseni@gmail.com"
-          git pull origin main --rebase
 
+          # Add and commit changes first
           if [ -d "lexical_features/" ] && [ "$(ls -A lexical_features/)" ]; then
             git add lexical_features/
-            
+
             if ! git diff --cached --quiet; then
               git commit -m "Auto-update: Lexical features [skip ci]"
-              git push origin HEAD:main
             else
               echo "No changes to commit for lexical features"
             fi
           else
             echo "No lexical feature files to commit"
           fi
+
+          # Now safe to pull and push
+          git pull --rebase origin main
+          git push origin HEAD:main
