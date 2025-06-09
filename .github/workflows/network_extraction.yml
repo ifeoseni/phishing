@@ -1,9 +1,9 @@
-name: Stage 3 Network Feature Extraction Workflow
+name: Stage 2 Network Feature Extraction Workflow
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: "0 3 * * *"
+  schedule:
+    - cron: "3 3 * * *"
 
 jobs:
   run-network-extraction:
@@ -38,8 +38,8 @@ jobs:
       - name: Define Paths, Find Input File, and Generate Output Path
         id: setup
         run: |
-          INPUT_DIR="lexical_features"
-          OUTPUT_DIR="network_data_with_lexical_features"
+          INPUT_DIR="http_status"
+          OUTPUT_DIR="network"
           PYTHON_SCRIPT="network_feature_extractor.py"
           INPUT_PATTERN="${{ matrix.input_pattern }}"
 

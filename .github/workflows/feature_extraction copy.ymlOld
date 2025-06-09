@@ -1,0 +1,69 @@
+name: Daily Feature Extraction
+
+on:
+  schedule:
+    - cron: "30 22 * * *" # 22:30 UTC = 23:30 Lagos (WAT)
+  workflow_dispatch:
+
+jobs:
+  extract-features:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10" # Ensure this matches the python version needed by your scripts
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Assuming requirements.txt includes pandas, aiohttp, aiodns, tldextract, etc.
+          pip install -r requirements.txt
+      - name: Install dependencies (with debug)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip show aiohttp || (echo "aiohttp not installed!" && exit 1)
+
+      # Optional: Add step to run your data cleaning script if it's not done elsewhere
+      # This step should create the cleaned_datasets_v2 directory and files
+      # - name: Run Data Cleaning
+      #   run: python your_cleaning_script.py
+
+      - name: Create HTTP Status Output Directory
+        run: mkdir -p http_status # Create directory for outputs
+
+      # Run HTTP Status Checker for the first cleaned file
+      - name: Run HTTP Status for PhiUSIIL Cleaned Data
+        run: |
+          python http_status_checker.py --input-file cleaned_data/PhiUSIIL_cleaned_v2.csv --output-dir http_status
+        # Continue even if one file fails, or remove `continue-on-error` to fail the job
+        continue-on-error: true
+
+      # Run HTTP Status Checker for the second cleaned file
+      - name: Run HTTP Status for Mendeley Cleaned Data
+        run: |
+          python http_status_checker.py --input-file cleaned_data/Mendeley_cleaned_v2.csv --output-dir http_status
+        continue-on-error: true
+
+      # Assuming lexical extractor runs independently or uses specific inputs
+      - name: Run Lexical Feature Extraction
+        run: |
+          python lexical_feature_extractor.py
+
+      - name: Upload HTTP Status Features
+        uses: actions/upload-artifact@v4
+        with:
+          name: http_status_features
+          # This will upload the http_status directory containing both output files
+          path: http_status/
+
+      - name: Upload Lexical Features
+        uses: actions/upload-artifact@v4
+        with:
+          name: lexical_features
+          path: lexical_features/ # Assuming this directory is created by the lexical script

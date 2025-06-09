@@ -1,0 +1,132 @@
+name: Stage 2 Lexical Feature Extraction Workflow
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "20 0 * * *"
+
+env:
+  PYTHON_VERSION: "3.11"
+  INPUT_DIR: "network_data_result"
+  OUTPUT_DIR: "lexical_features"
+  SCRIPT: "lexical_feature_extractor.py"
+
+jobs:
+  lexical-feature-extraction:
+    name: Extract Lexical Features (${{ matrix.dataset }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dataset: [phiusiil, mendeley]
+        include:
+          - dataset: phiusiil
+            input_pattern: "*PhiUSIIL*.csv"
+          - dataset: mendeley
+            input_pattern: "*Mendeley*.csv"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.MTECH }}
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas tldextract==3.4.1
+          pip list
+
+      - name: Verify input directory
+        run: |
+          if [ ! -d "${{ env.INPUT_DIR }}" ]; then
+            echo "::error::Input directory ${{ env.INPUT_DIR }} does not exist"
+            exit 1
+          fi
+
+      - name: Find latest input file
+        id: find-input
+        run: |
+          mkdir -p "${{ env.OUTPUT_DIR }}"
+
+          LATEST_FILE=$(find "${{ env.INPUT_DIR }}" -maxdepth 1 -name "${{ matrix.input_pattern }}" -type f -printf '%T@ %p\n' | \
+                        sort -n | tail -n 1 | cut -d' ' -f2-)
+
+          if [ -z "$LATEST_FILE" ]; then
+            echo "::error::No file found in ${{ env.INPUT_DIR }} matching ${{ matrix.input_pattern }}"
+            exit 1
+          fi
+
+          BASE_NAME=$(basename "$LATEST_FILE")
+          # Remove "http_status_" prefix from filename
+          CLEAN_BASE_NAME="${BASE_NAME#http_status_}"
+          OUTPUT_NAME="lexical_features_${CLEAN_BASE_NAME}"
+
+          echo "input_file=$LATEST_FILE" >> $GITHUB_OUTPUT
+          echo "output_file=${{ env.OUTPUT_DIR }}/$OUTPUT_NAME" >> $GITHUB_OUTPUT
+          echo "base_name=$BASE_NAME" >> $GITHUB_OUTPUT
+          echo "clean_base_name=$CLEAN_BASE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Run lexical feature extraction
+        run: |
+          python "${{ env.SCRIPT }}" \
+            --input-file "${{ steps.find-input.outputs.input_file }}" \
+            --output-dir "${{ env.OUTPUT_DIR }}"
+
+          # Verify output file using the clean base name
+          EXPECTED_OUTPUT="${{ env.OUTPUT_DIR }}/lexical_features_${{ steps.find-input.outputs.clean_base_name }}"
+          if [ ! -f "$EXPECTED_OUTPUT" ]; then
+            echo "::error::Output file was not created: $EXPECTED_OUTPUT"
+            ls -la "${{ env.OUTPUT_DIR }}"
+            exit 1
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lexical-features-${{ matrix.dataset }}-${{ github.run_number }}
+          path: ${{ env.OUTPUT_DIR }}/lexical_features_${{ steps.find-input.outputs.clean_base_name }}
+          retention-days: 7
+
+      - name: Commit and push results
+        env:
+          GITHUB_TOKEN: ${{ secrets.MTECH }}
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+          # Add files only if OUTPUT_DIR exists and is not empty
+          if [ -d "${{ env.OUTPUT_DIR }}" ] && [ "$(ls -A "${{ env.OUTPUT_DIR }}")" ]; then
+            git add "${{ env.OUTPUT_DIR }}"
+
+            # Commit if changes exist
+            if git diff --cached --quiet; then
+              echo "No changes to commit"
+            else
+              git commit -m "Automated update: Lexical features for ${{ matrix.dataset }} [skip ci]"
+            fi
+          else
+            echo "No output directory or files to commit"
+          fi
+
+          # Pull only if repo is clean
+          if git diff --quiet && git diff --cached --quiet; then
+            git pull --rebase origin main
+          else
+            echo "Skipping pull due to local changes"
+          fi
+
+          # Push only if there are new commits
+          if git log origin/main..HEAD --oneline | grep .; then
+            git push origin HEAD:main
+            echo "Changes pushed successfully"
+          else
+            echo "Nothing to push"
+          fi

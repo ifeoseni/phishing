@@ -1,7 +1,7 @@
 name: Stage 1 Feature Extraction To Get HTTP Status Code
 on:
   schedule:
-    - cron: "30 22 * * *" # 22:30 UTC = 23:30 Lagos (WAT)
+    - cron: "1 22 * * *" # 22:30 UTC = 23:30 Lagos (WAT)
   workflow_dispatch:
 jobs:
   extract-features:
