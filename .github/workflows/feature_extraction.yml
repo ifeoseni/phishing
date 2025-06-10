@@ -74,58 +74,58 @@ jobs:
           echo "HTTP status files found:"
           ls -la http_status/*.csv
 
-      - name: Run Lexical Feature Extraction
-        run: |
-          # Ensure the output directory exists
-          mkdir -p lexical_features
-          # Find CSV files in http_status and run the extractor for each
-          for input_csv in http_status/*.csv; do
-            if [ -f "$input_csv" ]; then
-              echo "Processing $input_csv with lexical_feature_extractor.py"
-              python lexical_feature_extractor.py --input-file "$input_csv" --output-dir lexical_features
-            else
-              echo "Warning: No CSV files found in http_status/ to process."
-              # Optionally exit if no files found: exit 1
-            fi
-          done
-      - name: Upload Lexical Features
-        uses: actions/upload-artifact@v4
-        with:
-          name: lexical_features
-          path: lexical_features/
-          if-no-files-found: warn
-      - name: Commit and push Lexical feature files
-        env:
-          TOKEN: ${{ secrets.MTECH }}
-        run: |
-          git config user.name "Ifeoluwa Oseni"
-          git config user.email "ifeoseni@gmail.com"
+      # - name: Run Lexical Feature Extraction
+      #   run: |
+      #     # Ensure the output directory exists
+      #     mkdir -p lexical_features
+      #     # Find CSV files in http_status and run the extractor for each
+      #     for input_csv in http_status/*.csv; do
+      #       if [ -f "$input_csv" ]; then
+      #         echo "Processing $input_csv with lexical_feature_extractor.py"
+      #         python lexical_feature_extractor.py --input-file "$input_csv" --output-dir lexical_features
+      #       else
+      #         echo "Warning: No CSV files found in http_status/ to process."
+      #         # Optionally exit if no files found: exit 1
+      #       fi
+      #     done
+      # - name: Upload Lexical Features
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: lexical_features
+      #     path: lexical_features/
+      #     if-no-files-found: warn
+      # - name: Commit and push Lexical feature files
+      #   env:
+      #     TOKEN: ${{ secrets.MTECH }}
+      #   run: |
+      #     git config user.name "Ifeoluwa Oseni"
+      #     git config user.email "ifeoseni@gmail.com"
 
-          echo "Setting up remote with token authentication..."
-          git remote set-url origin https://x-access-token:${TOKEN}@github.com/${{ github.repository }}
+      #     echo "Setting up remote with token authentication..."
+      #     git remote set-url origin https://x-access-token:${TOKEN}@github.com/${{ github.repository }}
 
-          echo "Cleaning untracked files in lexical_features/ directory..."
-          git clean -fdx lexical_features/
+      #     echo "Cleaning untracked files in lexical_features/ directory..."
+      #     git clean -fdx lexical_features/
 
-          echo "Pulling latest changes from origin main..."
-          git pull origin main --rebase || git pull origin main
+      #     echo "Pulling latest changes from origin main..."
+      #     git pull origin main --rebase || git pull origin main
 
-          if [ -d "lexical_features/" ] && [ "$(ls -A lexical_features/)" ]; then
-            echo "Adding lexical_features/ files to git..."
-            git add lexical_features/
-            if ! git diff --cached --quiet; then
-              echo "Committing lexical feature updates..."
-              git commit -m "Auto-update: Lexical feature extraction - $(date '+%Y-%m-%d %H:%M:%S')"
+      #     if [ -d "lexical_features/" ] && [ "$(ls -A lexical_features/)" ]; then
+      #       echo "Adding lexical_features/ files to git..."
+      #       git add lexical_features/
+      #       if ! git diff --cached --quiet; then
+      #         echo "Committing lexical feature updates..."
+      #         git commit -m "Auto-update: Lexical feature extraction - $(date '+%Y-%m-%d %H:%M:%S')"
 
-              echo "Pushing changes to origin main..."
-              git push origin main || {
-                echo "Push failed, pulling and retrying..."
-                git pull origin main --rebase
-                git push origin main
-              }
-            else
-              echo "No changes to commit for lexical features"
-            fi
-          else
-            echo "No lexical feature files to commit"
-          fi
+      #         echo "Pushing changes to origin main..."
+      #         git push origin main || {
+      #           echo "Push failed, pulling and retrying..."
+      #           git pull origin main --rebase
+      #           git push origin main
+      #         }
+      #       else
+      #         echo "No changes to commit for lexical features"
+      #       fi
+      #     else
+      #       echo "No lexical feature files to commit"
+      #     fi

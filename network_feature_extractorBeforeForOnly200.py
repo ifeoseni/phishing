@@ -340,7 +340,7 @@ async def fetch_html_features_async(url: str, session: aiohttp.ClientSession) ->
             
             # HTML parsing only for successful responses with HTML content type
             content_type = response.headers.get('Content-Type', '').lower()
-            if response.status // 100 == 2 and 'text/html' in content_type:
+            if response.status == 200 and 'text/html' in content_type:
                 try:
                     # Read up to MAX_HTML_SIZE bytes
                     html_content = await response.content.read(MAX_HTML_SIZE)
